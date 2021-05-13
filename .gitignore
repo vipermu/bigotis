@@ -2,3 +2,6 @@ __pycache__
 .vscode/settings.json
 
 node_modules 
+
+public/generations/*
+!public/generations/.keep
