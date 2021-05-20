@@ -1,16 +1,22 @@
 <script>
     import Select from "svelte-select";
     import { Jumper } from "svelte-loading-spinners";
+    import Slider from "@bulatdashiev/svelte-slider";
 
     let genImgUrl = "";
     let genVideoUrl = "";
+
+    let numIterations = [10];
+    let iterationRange = [1, 300];
+    let selectedResolution = [1024, 1024];
+    let resolutionRange = [200, 4000];
 
     let generatingImage = false;
 
     let modelArray = [
         {
             value: "dalle",
-            label: "🌐 General",
+            label: "🌴 Wild",
             possibilities: "faces",
         },
         {
@@ -25,7 +31,7 @@
         },
     ];
 
-    let selectedModel = modelArray[0];
+    let selectedModel = modelArray[1];
 
     let singleCreationActive = false;
     let collaborationActive = false;
@@ -80,7 +86,14 @@
         let params = {
             prompt: prompt,
             model: selectedModel.value,
+            numIterations: numIterations[0],
         };
+
+        if (selectedModel.value == "aphantasia") {
+            params[
+                "resolution"
+            ] = `${selectedResolution[0]}-${selectedResolution[1]}`;
+        }
 
         params = Object.assign({}, params, generationConfig);
 
@@ -130,21 +143,50 @@
     {#if prompt != ""}
         <div class="label-container">
             <label>
-                <input
-                    type="checkbox"
-                    bind:checked={generationConfig["imageGeneration"]}
-                    on:click={() => window.setTimeout(updateGenerationState, 0)}
-                />
-                Image Generation
+                <h3>
+                    <input
+                        type="checkbox"
+                        bind:checked={generationConfig["imageGeneration"]}
+                        on:click={() =>
+                            window.setTimeout(updateGenerationState, 0)}
+                    />
+
+                    Image Generation
+                </h3>
             </label>
             <label>
-                <input
-                    type="checkbox"
-                    bind:checked={generationConfig["videoGeneration"]}
-                    on:click={() => window.setTimeout(updateGenerationState, 0)}
-                />
-                Video Generation
+                <h3>
+                    <input
+                        type="checkbox"
+                        bind:checked={generationConfig["videoGeneration"]}
+                        on:click={() =>
+                            window.setTimeout(updateGenerationState, 0)}
+                    />
+                    Video Generation
+                </h3>
             </label>
+
+            <h3>{numIterations} iterations</h3>
+            <Slider
+                min={iterationRange[0]}
+                max={iterationRange[1]}
+                step="1"
+                bind:value={numIterations}
+            />
+
+            {#if selectedModel.value == "aphantasia"}
+                <h3>
+                    Resolution of {selectedResolution[0]} x {selectedResolution[1]}
+                </h3>
+                <Slider
+                    bind:value={selectedResolution}
+                    min={resolutionRange[0]}
+                    max={resolutionRange[1]}
+                    range
+                    step="8"
+                    on:input={(e) => console.log()}
+                />
+            {/if}
 
             {#if generationReady}
                 {#if !generatingImage}
@@ -165,20 +207,29 @@
         </div>
 
         {#if genImgUrl != ""}
-            <h2>Generated Image</h2>
-            <img
-                style="margin-top: 20px"
-                src={genImgUrl}
-                alt="Generated Image"
-            />
+            <div class="centered">
+                <h2>Generated Image</h2>
+            </div>
+            <div class="centered">
+                <img
+                    style="margin-top: 20px"
+                    src={genImgUrl}
+                    alt="Generated Image"
+                    width="50%"
+                />
+            </div>
         {/if}
 
         {#if genVideoUrl != ""}
-            <h2>Generated Video</h2>
-            <video controls>
-                <source src={genVideoUrl} type="video/mp4" />
-                Your browser does not support mp4...
-            </video>
+            <div class="centered">
+                <h2>Generated Video</h2>
+            </div>
+            <div class="centered">
+                <video width="50%" controls>
+                    <source src={genVideoUrl} type="video/mp4" />
+                    Your browser does not support mp4...
+                </video>
+            </div>
         {/if}
     {/if}
 {:else if collaborationActive}
@@ -192,5 +243,10 @@
     }
     .label-container {
         margin-top: 20px;
+    }
+    .centered {
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>

@@ -1,7 +1,11 @@
 __pycache__
 .vscode/settings.json
+public/build/*
 
 node_modules 
 
 public/generations/*
 !public/generations/.keep
+
+*.mp4
+*.pt

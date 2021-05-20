@@ -5,7 +5,7 @@ import imageio
 import numpy as np
 from flask import Flask, request, jsonify
 
-from models.dalle_decoder import generate_from_prompt
+from models import dalle_decoder, aphantasia, stylegan
 
 app = Flask(__name__)
 
@@ -21,6 +21,8 @@ def generate():
     model = request.args.get('model')
     generate_video = True if request.args.get('videoGeneration')=='true' else False
     generate_img = True if request.args.get('imageGeneration')=='true' else False
+    num_iterations = int(request.args.get('numIterations'))
+    resolution = request.args.get('resolution')
 
     img_url = ''
     video_url = ''
@@ -28,15 +30,28 @@ def generate():
     out_dir = f"public/generations/{prompt}"
 
     if model == 'dalle':
-        gen_img_list = generate_from_prompt(
+        gen_img_list = dalle_decoder.generate_from_prompt(
             prompt=prompt,
-            lr=0.9,
-            num_generations=10,
+            lr=0.7,
+            num_generations=num_iterations,
             img_save_freq=1,
         )
 
     elif model == 'aphantasia':
-        pass
+        gen_img_list = aphantasia.generate_from_prompt(
+            prompt=prompt,
+            lr=0.9,
+            num_generations=num_iterations,
+            img_save_freq=1,
+            resolution=resolution,
+        )
+    elif model == 'stylegan':
+        gen_img_list = stylegan.generate_from_prompt(
+            prompt=prompt,
+            lr=1e-2,
+            num_generations=num_iterations,
+            img_save_freq=1,
+        )
 
     else:
         response = jsonify(
