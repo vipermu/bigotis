@@ -23,7 +23,6 @@
         },
     ];
    
-
     let selectedModel = modelArray[1];
 
     function handleSelect(event) {

@@ -1,82 +1,45 @@
 <script>
-    import { Jumper } from "svelte-loading-spinners";
-    import Slider from "@bulatdashiev/svelte-slider";
+    import ModelParams from "./ModelParams.svelte"
+    import {promptPlaceholderArray} from "../utils.ts"
+    import Generate from "./Generate.svelte"
 
     export let selectedModel
-
-    let genImgUrl = "";
-    let genVideoUrl = "";
-    
+ 
     let numIterations = [10];
-    let iterationRange = [1, 300];
     let selectedResolution = [1024, 1024];
-    let resolutionRange = [200, 4000];
 
-    let generatingImage = false;
-    let generationReady = false;
 
-    let generationConfig = {
-        imageGeneration: false,
-        videoGeneration: false,
-    };
-
-    let promptPlaceholderArray = [
-        "The moustache of Salvador Dali",
-        "CHANEL alien collection",
-        "Birds wearing CHANEL",
-        "Roses made of CHANEL",
-        "CHANEL exotic jewelry collection",
-        "Flowers made of diamonds",
-    ];
-    
     let prompt = "";
-
-    function updateGenerationState() {
-        for (var key in generationConfig) {
-            if (generationConfig[key]) {
-                generationReady = true;
-                return;
-            }
-        }
-
-        generationReady = false;
+    let generationResultDict = {
+        'imgUrl': '',
+        'videoUrl': '',
     }
+    
+    $: genImgUrl = generationResultDict['imgUrl'];
+    $: genVideoUrl = generationResultDict['videoUrl'];
 
-    async function generate() {
-        generatingImage = true;
-
-        const serverURL = "http://localhost:8000";
-
-        let params = {
+    let generationParams = {
+            imageGeneration: false,
+            videoGeneration: false,
             prompt: prompt,
             model: selectedModel.value,
             numIterations: numIterations[0],
         };
 
-        if (selectedModel.value == "aphantasia") {
-            params[
-                "resolution"
-            ] = `${selectedResolution[0]}-${selectedResolution[1]}`;
-        }
+    $: if (prompt){ generationParams['prompt'] = prompt }
 
-        params = Object.assign({}, params, generationConfig);
-
-        let fetchURL = new URL(`${serverURL}/generate`);
-        fetchURL.search = new URLSearchParams(params).toString();
-
-        console.log("FETCHING DATA");
-        const res = await fetch(fetchURL.toString(), {
-            method: "GET",
-        });
-
-        const resultDict = await res.json();
-        console.log("RESULTS", resultDict);
-
-        genImgUrl = resultDict["imgUrl"];
-        genVideoUrl = resultDict["videoUrl"];
-
-        generatingImage = false;
+    $: generationReady = generationParams['imageGeneration'] || generationParams['videoGeneration'];
+    
+    $: if (selectedModel.value == "aphantasia") {
+        generationParams[
+            "resolution"
+        ] = `${selectedResolution[0]}-${selectedResolution[1]}`;
     }
+
+    function updateGenerationState(generationKey) {
+        generationParams[generationKey] = !generationParams[generationKey]
+    }
+
 </script>
 <h3>What do you want to generate?</h3>
 <div class="input-container">
@@ -94,9 +57,8 @@
             <h3>
                 <input
                     type="checkbox"
-                    bind:checked={generationConfig["imageGeneration"]}
-                    on:click={() =>
-                        window.setTimeout(updateGenerationState, 0)}
+                    bind:checked={generationParams["imageGeneration"]}
+                    on:click={() => updateGenerationState('imageGeneration')}
                 />
 
                 Image Generation
@@ -106,59 +68,32 @@
             <h3>
                 <input
                     type="checkbox"
-                    bind:checked={generationConfig["videoGeneration"]}
-                    on:click={() =>
-                        window.setTimeout(updateGenerationState, 0)}
+                    bind:checked={generationParams["videoGeneration"]}
+                    on:click={() => updateGenerationState('videoGeneration')}
                 />
                 Video Generation
             </h3>
         </label>
 
-        <h3>{numIterations} iterations</h3>
-        <Slider
-            min={iterationRange[0]}
-            max={iterationRange[1]}
-            step="1"
-            bind:value={numIterations}
+        <ModelParams
+            selectedModel={selectedModel}
+            bind:numIterations={numIterations}
+            bind:selectedResolution={selectedResolution}
         />
 
-        {#if selectedModel.value == "aphantasia"}
-            <h3>
-                Resolution of {selectedResolution[0]} x {selectedResolution[1]}
-            </h3>
-            <Slider
-                bind:value={selectedResolution}
-                min={resolutionRange[0]}
-                max={resolutionRange[1]}
-                range
-                step="8"
-                on:input={(e) => console.log()}
-            />
-        {/if}
-
         {#if generationReady}
-            {#if !generatingImage}
-                <div class="btn-container" style="margin-top: 20px">
-                    <button on:click={generate}>Generate</button>
-                </div>
-            {:else}
-                <div style="margin-top: 10px">
-                    <Jumper
-                        size="60"
-                        color="#BE3CC6"
-                        unit="px"
-                        duration="1.3s"
-                    />
-                </div>
-            {/if}
+            <Generate 
+                bind:generationParams={generationParams}
+                bind:generationResultDict={generationResultDict}
+            />
         {/if}
     </div>
 
-    {#if genImgUrl != ""}
+    {#if genImgUrl != ''}
         <div class="centered">
             <h2>Generated Image</h2>
         </div>
-        <div class="centered">
+        <div style="margin-down:40px" class="centered">
             <img
                 style="margin-top: 20px"
                 src={genImgUrl}
@@ -168,13 +103,16 @@
         </div>
     {/if}
 
-    {#if genVideoUrl != ""}
+    {#if genVideoUrl != ''}
         <div class="centered">
             <h2>Generated Video</h2>
         </div>
-        <div class="centered">
+        <div style="margin-down:40px" class="centered">
             <video width="50%" controls>
-                <source src={genVideoUrl} type="video/mp4" />
+                <source 
+                    src={genVideoUrl} 
+                    type="video/mp4" 
+                />
                 Your browser does not support mp4...
             </video>
         </div>
