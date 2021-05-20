@@ -1,6 +1,6 @@
 __pycache__
 .vscode/settings.json
-public/build/*
+public/build
 
 node_modules 
 
