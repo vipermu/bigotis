@@ -1,5 +1,6 @@
 import os
 import argparse
+import math
 from typing import *
 
 import numpy as np
@@ -350,6 +351,7 @@ def generate_from_prompt(
         args.size = tuple([int(res) for res in resolution.split("-")])
 
     gen_img_list = []
+    gen_fft_list = []
 
     clip_model, _ = clip.load(args.model)
     print(f"Using model {args.model}")
@@ -456,6 +458,63 @@ def generate_from_prompt(
                 img = np.clip(img * 255, 0, 255).astype(np.uint8)
                 pil_img = Image.fromarray(img)
                 gen_img_list.append(pil_img)
+                gen_fft_list.append(fft_img)
+
+    return gen_img_list, gen_fft_list
+
+
+def interpolate(
+    fft_img_list,
+    duration_list,
+    resolution=None,
+):
+    args = get_args()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    args.size = tuple([int(res) for res in resolution.split("-")])
+
+    num_channels = 3
+    spectrum_size = [args.batch_size, num_channels, *args.size]
+    fft_img, img_freqs = get_fft_img(
+        spectrum_size,
+        std=0.01,
+        return_img_freqs=True,
+    )
+
+    scale = get_scale_from_img_freqs(
+        img_freqs=img_freqs,
+        decay_power=args.decay,
+    )
+    scale = scale.to(device)
+
+    gen_img_list = []
+    fps = 25
+
+    for idx, (fft_img, duration) in enumerate(zip(fft_img_list,
+                                                  duration_list)):
+        num_steps = int(duration * fps)
+        fft_img_1 = fft_img
+        fft_img_2 = fft_img_list[(idx + 1) % len(fft_img_list)]
+
+        for step in range(num_steps):
+            weight = math.sin(1.5708 * step / num_steps)**2
+            fft_img_interp = weight * fft_img_2 + (1 - weight) * fft_img_1
+            img = fft_to_rgb(
+                fft_img=fft_img_interp,
+                scale=scale,
+                img_size=args.size,
+                shift=None,
+                contrast=1.0,
+                decorrelate=True,
+                device=device,
+            )
+            img = img.detach().cpu().numpy()[0]
+            img = np.transpose(np.array(img)[:, :, :], (1, 2, 0))
+            img = np.clip(img * 255, 0, 255).astype(np.uint8)
+            pil_img = Image.fromarray(img)
+
+            gen_img_list.append(pil_img)
 
     return gen_img_list
 

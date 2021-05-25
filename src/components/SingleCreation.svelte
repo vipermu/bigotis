@@ -2,6 +2,7 @@
     import ModelParams from "./ModelParams.svelte"
     import {promptPlaceholderArray} from "../utils.ts"
     import Generate from "./Generate.svelte"
+    import DisplayGeneration from "./DisplayGeneration.svelte"
 
     export let selectedModel
  
@@ -88,35 +89,12 @@
             />
         {/if}
     </div>
+    
+    <DisplayGeneration
+        bind:imgUrl={genImgUrl}
+        bind:videoUrl={genVideoUrl}
+    />
 
-    {#if genImgUrl != ''}
-        <div class="centered">
-            <h2>Generated Image</h2>
-        </div>
-        <div style="margin-down:40px" class="centered">
-            <img
-                style="margin-top: 20px"
-                src={genImgUrl}
-                alt="Generated Image"
-                width="50%"
-            />
-        </div>
-    {/if}
-
-    {#if genVideoUrl != ''}
-        <div class="centered">
-            <h2>Generated Video</h2>
-        </div>
-        <div style="margin-down:40px" class="centered">
-            <video width="50%" controls>
-                <source 
-                    src={genVideoUrl} 
-                    type="video/mp4" 
-                />
-                Your browser does not support mp4...
-            </video>
-        </div>
-    {/if}
 {/if}
 
 <style>

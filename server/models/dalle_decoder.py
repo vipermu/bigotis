@@ -1,4 +1,5 @@
 import os
+import glob
 from typing import *
 from PIL import Image
 
@@ -12,25 +13,26 @@ import PIL
 from dall_e import map_pixels, unmap_pixels, load_model
 
 target_img_size = 256
-embed_size = int(target_img_size / 8)
+embed_size = target_img_size // 8
+dalle_latent_dim = 8192
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-print("USING ", device)
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+print("USING ", DEVICE)
 
-clip_model, clip_preprocess = clip.load("ViT-B/32", device=device)
+clip_model, clip_preprocess = clip.load("ViT-B/32", device=DEVICE)
 clip_model.eval()
+# NOTE: just adding the normalization transformation
 clip_transform = T.Compose([
-    # clip_preprocess.transforms[2],
     clip_preprocess.transforms[4],
 ])
 
-dalle_enc = load_model("https://cdn.openai.com/dall-e/encoder.pkl", device)
-dalle_dec = load_model("https://cdn.openai.com/dall-e/decoder.pkl", device)
+dalle_enc = load_model("https://cdn.openai.com/dall-e/encoder.pkl", DEVICE)
 dalle_enc.eval()
+dalle_dec = load_model("https://cdn.openai.com/dall-e/decoder.pkl", DEVICE)
 dalle_dec.eval()
 
 
-def preprocess(img):
+def dalle_img_preprocess(img):
     img = img.convert("RGB")
 
     min_img_dim = min(img.size)
@@ -40,17 +42,40 @@ def preprocess(img):
                       round(scale_factor * img.size[1]))
     img = img.resize(scaled_img_dim, PIL.Image.LANCZOS)
     img = TF.center_crop(img, output_size=2 * [target_img_size])
-    img_tensor = torch.unsqueeze(T.ToTensor()(img), 0).to(device)
+    img_tensor = torch.unsqueeze(T.ToTensor()(img), 0).to(DEVICE)
 
     return map_pixels(img_tensor)
 
 
-def compute_clip_loss(img, text):
-    img = clip_transform(img)
-    img = F.upsample_bilinear(img, (224, 224))
-    img_logits = clip_model.encode_image(img)
+def get_dalle_img_encodings(
+    img_batch,
+    do_preprocess=False,
+):
+    if do_preprocess:
+        img_batch = dalle_img_preprocess(img_batch)
 
-    tokenized_text = clip.tokenize([text]).to(device).detach().clone()
+    z_logits = dalle_enc(img_batch)
+
+    return z_logits
+
+
+def get_clip_img_encodings(
+    img_batch,
+    do_preprocess=True,
+):
+    if do_preprocess:
+        img_batch = clip_transform(img_batch)
+        img_batch = F.upsample_bilinear(img_batch, (224, 224))
+
+    img_logits = clip_model.encode_image(img_batch)
+
+    return img_logits
+
+
+def compute_clip_loss(img, text):
+    img_logits = get_clip_img_encodings(img)
+
+    tokenized_text = clip.tokenize([text]).to(DEVICE).detach().clone()
     text_logits = clip_model.encode_text(tokenized_text)
 
     loss = -torch.cosine_similarity(text_logits, img_logits).mean()
@@ -81,21 +106,6 @@ def get_stacked_random_crops(img, num_random_crops=64):
     return img
 
 
-def get_img_encodings(img_batch, do_preprocess=False):
-    if do_preprocess:
-        img_batch = preprocess(img_batch)
-
-    z_logits = dalle_enc(img_batch)
-
-    # z = torch.argmax(z_logits, axis=1)
-    # z = F.one_hot(
-    #     z,
-    #     num_classes=dalle_enc.vocab_size,
-    # ).permute(0, 3, 1, 2).float()
-
-    return z_logits
-
-
 def generate_from_prompt(
     prompt: str,
     lr: float = 3e-1,
@@ -106,47 +116,67 @@ def generate_from_prompt(
 ):
     gen_img_list = []
 
-    # z_logits = torch.randn((1, 8192, embed_size, embed_size)).to(device)
-    z_logits = torch.rand((1, 3, target_img_size, target_img_size)).to(device)
+    # z_logits = .5 * torch.randn(1, dalle_latent_dim, embed_size,
+    #                             embed_size).cuda()
+    # z_logits = torch.sinh(1.9 * torch.arcsinh(z_logits))
+    # z_logits = z_logits.clip(-6, 6)
+
+    rand_img = torch.zeros((1, 3, target_img_size, target_img_size)).to(DEVICE)
+    rand_img = map_pixels(rand_img)
     with torch.no_grad():
-        z_logits = get_img_encodings(z_logits)
+        z_logits = get_dalle_img_encodings(rand_img)
+
+    # z_logits = z_logits / 10
+
+    # z_logits = torch.randn(
+    #     (1, dalle_latent_dim, embed_size, embed_size)).to(DEVICE)
 
     if img_batch is not None:
-        img_z_logits = get_img_encodings(img_batch)
-        img_z_logits = img_z_logits.detach().clone()
-        # z_logits = img_z_logits
+        dalle_img_z_logits = get_dalle_img_encodings(img_batch)
+        dalle_img_z_logits = dalle_img_z_logits.detach().clone()
+        clip_img_z_logits = get_clip_img_encodings(img_batch)
+        clip_img_z_logits = clip_img_z_logits.detach().clone()
 
-    z_logits = torch.nn.Parameter(z_logits, requires_grad=True)
+    z_logits = torch.nn.Parameter(z_logits.clone(), requires_grad=True)
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         params=[z_logits],
         lr=lr,
         betas=(0.9, 0.999),
+        weight_decay=0.1,
     )
 
     temp = 1
-    for counter in range(num_generations):
+    for step in range(num_generations):
         loss = 0
+
+        print(z_logits.max())
+
         z = F.gumbel_softmax(
-            z_logits.permute(0, 2, 3, 1).reshape(1, embed_size**2, 8192),
+            z_logits.permute(0, 2, 3, 1).reshape(1, embed_size**2,
+                                                 dalle_latent_dim),
             tau=temp,
             hard=False,
             dim=-1,
-        ).view(1, embed_size, embed_size, 8192).permute(0, 3, 1, 2)
+        ).view(1, embed_size, embed_size,
+               dalle_latent_dim).permute(0, 3, 1, 2)
 
         x_stats = dalle_dec(z).float()
         x_rec = unmap_pixels(torch.sigmoid(x_stats[:, :3]))
-
-        # x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
-        # x_rec_img.save(f"test_imgs/{counter}.png")
 
         x_rec_stacked = get_stacked_random_crops(
             img=x_rec,
             num_random_crops=num_random_crops,
         )
 
-        loss += 10 * compute_clip_loss(x_rec_stacked, prompt)
-        loss += torch.mean((z_logits - img_z_logits)**2) / 1000
+        # loss += 10 * compute_clip_loss(x_rec_stacked, prompt)
+
+        # if img_batch is not None:
+        #     loss += -torch.cosine_similarity(z_logits,
+        #                                      dalle_img_z_logits).mean()
+        if img_batch is not None:
+            loss += -torch.cosine_similarity(get_clip_img_encodings(x_rec),
+                                             clip_img_z_logits).mean()
 
         print(loss)
 
@@ -154,28 +184,34 @@ def generate_from_prompt(
         loss.backward()
         optimizer.step()
 
-        if counter % img_save_freq == 0:
+        if step % img_save_freq == 0:
             print("Saving generation...")
             x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
             gen_img_list.append(x_rec_img)
 
-            x_rec_img.save(f"test_imgs/{counter}.png")
+            x_rec_img.save(f"test_imgs/{step}.png")
 
     return gen_img_list
 
 
 if __name__ == "__main__":
-    prompt = "The image of a red rose"
+    prompt = "The logo of CHANEL"
 
-    img = Image.open('ref_imgs/rose.jpeg')
-    img = preprocess(img)
-    # img = None
+    img_tensor_list = []
+    for img_path in glob.glob("./img-refs/*"):
+        img = Image.open(img_path)
+        img_tensor_list.append(dalle_img_preprocess(img))
+
+    img = torch.cat(img_tensor_list)
+
+    # img = Image.open('ref_imgs/1.png')
+    # img = dalle_img_preprocess(img)
 
     _ = generate_from_prompt(
         prompt=prompt,
-        lr=0.9,
+        lr=0.5,
         img_save_freq=1,
-        num_generations=400,
+        num_generations=10000,
         num_random_crops=1,
         img_batch=img,
     )

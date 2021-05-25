@@ -1,19 +1,42 @@
 <script>
     import ModelParams from "./ModelParams.svelte"
     import Generate from "./Generate.svelte"
+    import DisplayGeneration from "./DisplayGeneration.svelte"
     import {promptPlaceholderArray} from "../utils.ts"
     import Slider from "@bulatdashiev/svelte-slider";
 
     export let selectedModel
 
-    let numIterations
-    let selectedResolution
+    let numIterations = [200]
+    let selectedResolution = [720, 1280]
 
     let promptArray = ['']
     let durationArray = [[0.5]]
 
     let minDuration = 0.1
     let maxDuration = 10
+    
+    let generationParams = {
+        storyGeneration: true,
+        model: selectedModel.value,
+        numIterations: numIterations[0],
+        promptArray:promptArray,
+        durationArray:durationArray,
+    };
+    
+    let generationResultDict = {
+        'imgUrl': '',
+        'videoUrl': '',
+    }
+    
+    $: genImgUrl = generationResultDict['imgUrl'];
+    $: genVideoUrl = generationResultDict['videoUrl'];
+    
+    $: if (selectedModel.value == "aphantasia") {
+        generationParams[
+            "resolution"
+        ] = `${selectedResolution[0]}-${selectedResolution[1]}`;
+    }
 
 
     function addPrompt(){
@@ -53,7 +76,15 @@
     bind:selectedResolution={selectedResolution}
 />
 
-<Generate />
+<Generate 
+    bind:generationParams={generationParams}
+    bind:generationResultDict={generationResultDict}
+/>
+
+<DisplayGeneration
+    bind:imgUrl={genImgUrl}
+    bind:videoUrl={genVideoUrl}
+/>
 
 
 <style>
