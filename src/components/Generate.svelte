@@ -1,5 +1,6 @@
 <script>
     import { Jumper } from "svelte-loading-spinners";
+    import {serverIP, apiPort} from "../utils.ts"
         
     export let generationParams
     export let generationResultDict
@@ -10,7 +11,8 @@
         console.log("GENERATING WITH PARAMS", generationParams);
         generatingImage = true;
 
-        const serverURL = "http://localhost:8000";
+        // const serverURL = "http://localhost:8000";
+        const serverURL = `http://${serverIP}:${apiPort}`
 
         let fetchURL = new URL(`${serverURL}/generate`);
         fetchURL.search = new URLSearchParams(generationParams).toString();

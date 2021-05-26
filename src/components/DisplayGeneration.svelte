@@ -1,6 +1,11 @@
 <script>
+    import {serverIP, contentPort} from "../utils.ts"
+
     export let imgUrl = ''
     export let videoUrl = ''
+    
+    let contentURL = `http://${serverIP}:${contentPort}`
+
 </script>
 
 {#if imgUrl != ''}
@@ -10,7 +15,7 @@
     <div style="margin-bottom:40px" class="centered">
         <img
             style="margin-top: 20px"
-            src={imgUrl}
+            src={`${contentURL}/${imgUrl}`}
             alt="Generated Image"
             width="50%"
         />
