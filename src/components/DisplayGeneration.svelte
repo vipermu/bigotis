@@ -29,7 +29,7 @@
     <div style="margin-bottom:40px" class="centered">
         <video width="50%" controls>
             <source 
-                src={videoUrl} 
+                src={`${contentURL}/${videoUrl}`}
                 type="video/mp4" 
             />
             Your browser does not support mp4...
