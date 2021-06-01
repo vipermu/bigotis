@@ -18,6 +18,7 @@ if not os.path.exists('./server/models/taming/last.ckpt'):
     os.system(
         " wget 'https://heibox.uni-heidelberg.de/f/867b05fc8c4841768640/?dl=1' -O 'server/models/taming/last.ckpt'"
     )
+
 if not os.path.exists('./server/models/taming/model.yaml'):
     os.system(
         "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"

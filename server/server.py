@@ -163,6 +163,8 @@ def generate():
         duration_list = [
             float(dur) for dur in request.args.get('durationArray').split(',')
         ]
+        prompt_list = ['_'.join(prompt.split(' ')) for prompt in prompt_list]
+
         out_dir = f"public/generations/{'-'.join(prompt_list)}"
         os.makedirs(out_dir, exist_ok=True)
 
