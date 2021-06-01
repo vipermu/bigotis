@@ -1,9 +1,16 @@
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
 from collections import OrderedDict
+
+if not os.path.exists('./server/models/sg1.pt'):
+    os.system(
+        "wget 'https://github.com/lernapparat/lernapparat/releases/download/v2019-02-01/karras2019stylegan-ffhq-1024x1024.for_g_all.pt' -O './server/models/sg1.pt'"
+    )
 
 
 class MyLinear(nn.Module):

@@ -9,6 +9,7 @@ public/generations/*
 
 *.mp4
 *.pt
+*.pth
 
 ref_imgs
 img-refs
