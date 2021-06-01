@@ -4,8 +4,8 @@
     export let imgUrl = ''
     export let videoUrl = ''
     
-    // let contentURL = `http://${serverIP}:${contentPort}`
-    let contentURL = ``
+    let contentURL = `http://${serverIP}:${contentPort}`
+    // let contentURL = ``
 
 </script>
 

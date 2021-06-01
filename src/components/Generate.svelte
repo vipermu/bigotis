@@ -11,7 +11,6 @@
         console.log("GENERATING WITH PARAMS", generationParams);
         generatingImage = true;
 
-        // const serverURL = "http://localhost:8000";
         const serverURL = `http://${serverIP}:${apiPort}`
 
         let fetchURL = new URL(`${serverURL}/generate`);
