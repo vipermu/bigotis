@@ -5,6 +5,7 @@ import imageio
 import numpy as np
 from flask import Flask, request, jsonify
 
+from models.taming import taming_decoder
 from models import dalle_decoder, aphantasia, stylegan
 
 app = Flask(__name__)
@@ -44,6 +45,15 @@ def single_generation(
             lr=1e-2,
             num_generations=num_iterations,
             img_save_freq=1,
+        )
+    elif model == 'taming':
+        gen_img_list = taming_decoder.generate_from_prompt(
+            prompt=prompt,
+            lr=0.5,
+            img_save_freq=1,
+            num_generations=num_iterations,
+            num_random_crops=20,
+            img_batch=None,
         )
 
     else:

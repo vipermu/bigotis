@@ -9,3 +9,9 @@ public/generations/*
 
 *.mp4
 *.pt
+
+ref_imgs
+img-refs
+
+server/models/taming/last.ckpt
+server/models/taming/model.yaml

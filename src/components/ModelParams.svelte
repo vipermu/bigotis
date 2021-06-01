@@ -7,6 +7,7 @@
     export let iterationRange = [1, 300];
     export let selectedResolution = [1024, 1024];
     export let resolutionRange = [200, 4000];
+
 </script>
 
 <h3>{numIterations} iterations</h3>

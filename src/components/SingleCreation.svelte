@@ -10,6 +10,7 @@
     let selectedResolution = [1024, 1024];
 
 
+
     let prompt = "";
     let generationResultDict = {
         'imgUrl': '',
@@ -26,6 +27,10 @@
             model: selectedModel.value,
             numIterations: numIterations[0],
         };
+    
+    $: if(numIterations){
+        generationParams['numIterations'] = numIterations[0]
+    }
 
     $: if (prompt){ generationParams['prompt'] = prompt }
 

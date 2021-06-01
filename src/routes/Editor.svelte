@@ -8,17 +8,22 @@
     let modelArray = [
         {
             value: "dalle",
-            label: "🌴 Wild",
+            label: "🌴 DALL-E",
+            possibilities: "faces",
+        },
+        {
+            value: "taming",
+            label: "🌎 Taming",
             possibilities: "faces",
         },
         {
             value: "aphantasia",
-            label: "✨ Dreamy",
+            label: "✨ Aphantasia",
             possibilities: "anything you want",
         },
         {
             value: "stylegan",
-            label: "😗 Faces",
+            label: "😗 StyleGAN",
             possibilities: "faces",
         },
     ];
@@ -42,15 +47,12 @@
 <div class="btn-container">
     <button on:click={()=>activeMode='singleCreation'}>Single Creation</button>
     <button on:click={()=>activeMode='storyMode'}>Story Mode</button>
-    <button on:click={()=>activeMode='collaboration'}>Colaboration</button>
 </div>
 
 {#if activeMode=='singleCreation'}
     <SingleCreation selectedModel={selectedModel}/>
 {:else if activeMode=='storyMode'}
     <StoryMode selectedModel={selectedModel}/>
-{:else if activeMode=='collaboration'}
-    Collaboration
 {/if}
 
 <style>

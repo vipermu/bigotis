@@ -19,3 +19,6 @@ dependencies:
     - clip==1.0
     - dall-e==0.1
     - imageio-ffmpeg==0.4.3
+    - PyYAML==5.4.1
+    - omegaconf==2.0.6
+    - pytorch-lightning==1.3.3
