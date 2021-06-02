@@ -21,8 +21,8 @@
     $: genVideoUrl = generationResultDict['videoUrl'];
 
     let generationParams = {
-            imageGeneration: false,
-            videoGeneration: false,
+            imageGeneration: true,
+            videoGeneration: true,
             prompt: prompt,
             model: selectedModel.value,
             numIterations: numIterations[0],
@@ -82,7 +82,7 @@
         </label>
 
         <ModelParams
-            selectedModel={selectedModel}
+            bind:selectedModel={selectedModel}
             bind:numIterations={numIterations}
             bind:selectedResolution={selectedResolution}
         />

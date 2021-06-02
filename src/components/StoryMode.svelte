@@ -75,7 +75,7 @@
 <button on:click={addPrompt}> Add prompt </button>
 
 <ModelParams
-    selectedModel={selectedModel}
+    bind:selectedModel={selectedModel}
     bind:numIterations={numIterations}
     bind:selectedResolution={selectedResolution}
 />

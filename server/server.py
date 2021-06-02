@@ -103,6 +103,7 @@ def story_generation(
     interp_img_list = []
     interp_feat_list = []
     for prompt in prompt_list:
+        print(f"USING {model}")
         if model == 'aphantasia':
             gen_img_list, feat_list = aphantasia.generate_from_prompt(
                 prompt=prompt,
@@ -113,7 +114,7 @@ def story_generation(
             )
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
-        if model == 'taming':
+        elif model == 'taming':
             gen_img_list, feat_list = taming_decoder.generate_from_prompt(
                 prompt=prompt,
                 lr=0.5,
@@ -124,7 +125,7 @@ def story_generation(
             )
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
-        if model == 'stylegan':
+        elif model == 'stylegan':
             gen_img_list, feat_list = stylegan.generate_from_prompt(
                 prompt=prompt,
                 lr=3e-2,
@@ -148,13 +149,13 @@ def story_generation(
             resolution=resolution,
         )
 
-    if model == 'taming':
+    elif model == 'taming':
         interp_result_img_list = taming_decoder.interpolate(
             interp_feat_list,
             duration_list,
         )
 
-    if model == 'stylegan':
+    elif model == 'stylegan':
         interp_result_img_list = stylegan.interpolate(
             interp_feat_list,
             duration_list,
