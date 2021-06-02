@@ -1,4 +1,5 @@
 import os
+import math
 import argparse
 
 import torch
@@ -172,6 +173,7 @@ def generate_from_prompt(
     args.img_save_freq = img_save_freq
 
     gen_img_list = []
+    latents_list = []
     counter = 0
     for _step in range(num_generations):
 
@@ -201,5 +203,35 @@ def generate_from_prompt(
 
             print(f'Step {counter}')
             print(f'Loss {loss.data.cpu().numpy()[0][0]}')
+
+            latents_list.append(latents.clone())
+
+    return gen_img_list, latents_list
+
+
+def interpolate(
+    latents_list,
+    duration_list,
+):
+    gen_img_list = []
+    fps = 25
+
+    for idx, (latents, duration) in enumerate(zip(latents_list,
+                                                  duration_list)):
+        num_steps = int(duration * fps)
+        latents1 = latents
+        latents2 = latents_list[(idx + 1) % len(latents_list)]
+
+        dlatents1 = latents1.repeat(1, 18, 1)
+        dlatents2 = latents2.repeat(1, 18, 1)
+
+        for step in range(num_steps):
+            weight = math.sin(1.5708 * step / num_steps)**2
+            dlatents = weight * dlatents2 + (1 - weight) * dlatents1
+
+            img = g_synthesis(dlatents)
+            img = tensor_to_pil_img(img)
+
+            gen_img_list.append(img)
 
     return gen_img_list

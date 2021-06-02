@@ -40,7 +40,7 @@ def single_generation(
             resolution=resolution,
         )
     elif model == 'stylegan':
-        gen_img_list = stylegan.generate_from_prompt(
+        gen_img_list, feat_list = stylegan.generate_from_prompt(
             prompt=prompt,
             lr=3e-2,
             num_generations=num_iterations,
@@ -124,6 +124,16 @@ def story_generation(
             )
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
+        if model == 'stylegan':
+            gen_img_list, feat_list = stylegan.generate_from_prompt(
+                prompt=prompt,
+                lr=3e-2,
+                num_generations=num_iterations,
+                img_save_freq=1,
+            )
+            interp_img_list.append(gen_img_list[-1])
+            interp_feat_list.append(feat_list[-1])
+
         else:
             response = jsonify(
                 success=False,
@@ -140,6 +150,12 @@ def story_generation(
 
     if model == 'taming':
         interp_result_img_list = taming_decoder.interpolate(
+            interp_feat_list,
+            duration_list,
+        )
+
+    if model == 'stylegan':
+        interp_result_img_list = stylegan.interpolate(
             interp_feat_list,
             duration_list,
         )
