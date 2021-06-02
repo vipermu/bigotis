@@ -6,7 +6,7 @@
 
     export let selectedModel
  
-    let numIterations = [10];
+    let numIterations = [50];
     let selectedResolution = [1024, 1024];
 
 

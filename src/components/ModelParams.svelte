@@ -3,8 +3,8 @@
 
     export let selectedModel
 
-    export let numIterations = [10];
-    export let iterationRange = [1, 300];
+    export let numIterations = [50];
+    export let iterationRange = [10, 500];
     export let selectedResolution = [1024, 1024];
     export let resolutionRange = [200, 4000];
 

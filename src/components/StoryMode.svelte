@@ -9,11 +9,15 @@
 
     let numIterations = [200]
     let selectedResolution = [720, 1280]
+    
+    $: if(numIterations){
+        generationParams['numIterations'] = numIterations[0]
+    }
 
     let promptArray = ['']
-    let durationArray = [[0.5]]
+    let durationArray = [[1.5]]
 
-    let minDuration = 0.1
+    let minDuration = 0.5
     let maxDuration = 10
     
     let generationParams = {
@@ -41,7 +45,7 @@
 
     function addPrompt(){
         promptArray.push('')
-        durationArray.push([0.5])
+        durationArray.push([durationArray[durationArray.length-1]])
         promptArray = promptArray
         durationArray = durationArray
     }
@@ -62,7 +66,7 @@
             bind:value={durationArray[idx]}
             min={minDuration}
             max={maxDuration}
-            step="0.1"
+            step="0.10"
         />
 
     </div>
