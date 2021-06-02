@@ -25,7 +25,7 @@ if not os.path.exists('./server/models/taming/model.yaml'):
         "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
     )
 
-target_img_size = 256
+target_img_size = 512
 embed_size = target_img_size // 16
 dalle_latent_dim = 8192
 
