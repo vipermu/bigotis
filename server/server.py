@@ -42,12 +42,12 @@ def single_generation(
     elif model == 'stylegan':
         gen_img_list = stylegan.generate_from_prompt(
             prompt=prompt,
-            lr=1e-2,
+            lr=3e-2,
             num_generations=num_iterations,
             img_save_freq=1,
         )
     elif model == 'taming':
-        gen_img_list = taming_decoder.generate_from_prompt(
+        gen_img_list, feat_list = taming_decoder.generate_from_prompt(
             prompt=prompt,
             lr=0.5,
             img_save_freq=1,
@@ -113,6 +113,17 @@ def story_generation(
             )
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
+        if model == 'taming':
+            gen_img_list, feat_list = taming_decoder.generate_from_prompt(
+                prompt=prompt,
+                lr=0.5,
+                img_save_freq=1,
+                num_generations=num_iterations,
+                num_random_crops=20,
+                img_batch=None,
+            )
+            interp_img_list.append(gen_img_list[-1])
+            interp_feat_list.append(feat_list[-1])
         else:
             response = jsonify(
                 success=False,
@@ -125,6 +136,12 @@ def story_generation(
             interp_feat_list,
             duration_list,
             resolution=resolution,
+        )
+
+    if model == 'taming':
+        interp_result_img_list = taming_decoder.interpolate(
+            interp_feat_list,
+            duration_list,
         )
 
     out_video_path = f"{out_dir}/interpolation.mp4"

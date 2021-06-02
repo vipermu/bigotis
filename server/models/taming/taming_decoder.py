@@ -1,5 +1,6 @@
 import os
 import yaml
+import math
 from typing import *
 
 import torch
@@ -24,7 +25,7 @@ if not os.path.exists('./server/models/taming/model.yaml'):
         "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
     )
 
-target_img_size = 512
+target_img_size = 256
 embed_size = target_img_size // 16
 dalle_latent_dim = 8192
 
@@ -170,6 +171,7 @@ def generate_from_prompt(
     )
 
     gen_img_list = []
+    z_logits_list = []
 
     for step in range(num_generations):
         loss = 0
@@ -202,10 +204,38 @@ def generate_from_prompt(
             print("Saving generation...")
             x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
             gen_img_list.append(x_rec_img)
+            z_logits_list.append(z_logits.detach().clone())
 
             # x_rec_img.save(f"test_imgs/{step}.png")
 
         torch.cuda.empty_cache()
+
+    return gen_img_list, z_logits_list
+
+
+def interpolate(
+    z_logits_list,
+    duration_list,
+):
+    gen_img_list = []
+    fps = 25
+
+    for idx, (z_logits,
+              duration) in enumerate(zip(z_logits_list, duration_list)):
+        num_steps = int(duration * fps)
+        z_logits_1 = z_logits
+        z_logits_2 = z_logits_list[(idx + 1) % len(z_logits_list)]
+
+        for step in range(num_steps):
+            weight = math.sin(1.5708 * step / num_steps)**2
+            z_logits = weight * z_logits_2 + (1 - weight) * z_logits_1
+
+            z = vqgan_model.post_quant_conv(z_logits)
+            x_rec = vqgan_model.decoder(z)
+            x_rec = (x_rec.clip(-1, 1) + 1) / 2
+
+            x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
+            gen_img_list.append(x_rec_img)
 
     return gen_img_list
 
