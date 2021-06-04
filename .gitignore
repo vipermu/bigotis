@@ -3,6 +3,7 @@ __pycache__
 public/build
 
 node_modules 
+package-lock.json
 
 public/generations/*
 !public/generations/.keep
