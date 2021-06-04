@@ -1,6 +1,7 @@
 import os
 import yaml
 import math
+import glob
 from typing import *
 
 import torch
@@ -38,6 +39,26 @@ clip_model.eval()
 clip_transform = T.Compose([
     clip_preprocess.transforms[4],
 ])
+
+norm_trans = T.Normalize(
+    (0.48145466, 0.4578275, 0.40821073),
+    (0.26862954, 0.26130258, 0.27577711),
+)
+
+
+def vqgan_preprocess(img):
+    img = img.convert("RGB")
+    img = img.resize((target_img_size, target_img_size), Image.LANCZOS)
+    img = np.asarray(img, dtype=np.float32)
+    img = torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2)
+    img /= 255.
+    # img = 2. * img - 1.
+    img = img.to(DEVICE)
+    img = img[:, :3]
+
+    img = norm_trans(img)
+
+    return img
 
 
 def load_config(config_path, display=False):
@@ -163,6 +184,15 @@ def generate_from_prompt(
 
     z_logits = torch.nn.Parameter(torch.sinh(1.9 * torch.arcsinh(z_logits)), )
 
+    if img_batch is not None:
+        clip_img_z_logits = get_clip_img_encodings(img)
+        clip_img_z_logits = clip_img_z_logits.detach().clone()
+
+        z, _, [_, _, indices] = vqgan_model.encode(img)
+
+        z_logits = torch.nn.Parameter(z)
+        img_z_logits = z.detach().clone()
+
     optimizer = torch.optim.AdamW(
         params=[z_logits],
         lr=lr,
@@ -187,12 +217,12 @@ def generate_from_prompt(
 
         loss += 10 * compute_clip_loss(x_rec_stacked, prompt)
 
+        if img_batch is not None:
+            loss += -10 * torch.cosine_similarity(z_logits,
+                                                  img_z_logits).mean()
         # if img_batch is not None:
-        #     loss += -torch.cosine_similarity(z_logits,
-        #                                      dalle_img_z_logits).mean()
-        # if img_batch is not None:
-        #     loss += -torch.cosine_similarity(get_clip_img_encodings(x_rec),
-        #                                      clip_img_z_logits).mean()
+        #     loss += -10 * torch.cosine_similarity(
+        #         get_clip_img_encodings(x_rec), clip_img_z_logits).mean()
 
         print(loss)
 
@@ -206,7 +236,7 @@ def generate_from_prompt(
             gen_img_list.append(x_rec_img)
             z_logits_list.append(z_logits.detach().clone())
 
-            # x_rec_img.save(f"test_imgs/{step}.png")
+            x_rec_img.save(f"test_imgs/{step}.png")
 
         torch.cuda.empty_cache()
 
@@ -241,4 +271,21 @@ def interpolate(
 
 
 if __name__ == '__main__':
-    generate_from_prompt(prompt="penguins wearing chanel", )
+    img_tensor_list = []
+    # for img_path in glob.glob("./img_refs/*"):
+    #     img = Image.open(img_path)
+    #     img_tensor_list.append(vqgan_preprocess(img))
+    img_path = glob.glob("./ref_imgs/*")[0]
+    img = Image.open(img_path)
+    img_tensor_list.append(vqgan_preprocess(img))
+
+    img = torch.cat(img_tensor_list)
+
+    # img = Image.open('ref_imgs/1.png')
+    # img = dalle_img_preprocess(img)
+
+    generate_from_prompt(
+        prompt="CHANEL logo made of roses",
+        img_batch=img,
+        lr=0.5,
+    )
