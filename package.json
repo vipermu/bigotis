@@ -22,6 +22,7 @@
     "@bulatdashiev/svelte-slider": "^1.0.3",
     "sirv-cli": "^1.0.0",
     "svelte-loading-spinners": "^0.1.4",
-    "svelte-routing": "^1.6.0"
+    "svelte-routing": "^1.6.0",
+    "sveltefileuploadcomponent": "^0.1.0"
   }
 }

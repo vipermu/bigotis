@@ -170,10 +170,10 @@ class TamingDecoder:
             torch.sinh(1.9 * torch.arcsinh(z_logits)), )
 
         if img_batch is not None:
-            clip_img_z_logits = self.get_clip_img_encodings(img)
+            clip_img_z_logits = self.get_clip_img_encodings(img_batch)
             clip_img_z_logits = clip_img_z_logits.detach().clone()
 
-            z, _, [_, _, indices] = self.vqgan_model.encode(img)
+            z, _, [_, _, indices] = self.vqgan_model.encode(img_batch)
 
             z_logits = torch.nn.Parameter(z)
             img_z_logits = z.detach().clone()

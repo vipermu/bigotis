@@ -28,7 +28,7 @@
         },
     ];
    
-    let selectedModel = modelArray[1];
+    let selectedModel = modelArray[0];
 
     function handleSelect(event) {
         selectedModel = event.detail;

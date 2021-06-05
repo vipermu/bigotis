@@ -58,7 +58,8 @@
             }
         };
         
-        let interval = setInterval(getResults, 2000); 
+        // let interval = setInterval(getResults, 2000); 
+        getResults()
 
 
     }

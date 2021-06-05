@@ -2,6 +2,7 @@ import imageio
 from typing import *
 
 import numpy as np
+import torch
 
 from models.taming.taming_decoder import TamingDecoder
 from models.stylegan import StyleGAN
@@ -11,6 +12,7 @@ from models import aphantasia
 
 def single_generation(
     prompt,
+    img_list,
     model,
     num_iterations,
     resolution,
@@ -46,13 +48,22 @@ def single_generation(
         )
     elif model == 'taming':
         taming_decoder = TamingDecoder()
+
+        if img_list is not None:
+            img_processed_list = [
+                taming_decoder.vqgan_preprocess(img) for img in img_list
+            ]
+            img_batch = torch.cat(img_processed_list)
+        else:
+            img_batch = None
+
         gen_img_list, _feat_list = taming_decoder.generate_from_prompt(
             prompt=prompt,
             lr=0.5,
             img_save_freq=1,
             num_generations=num_iterations,
             num_random_crops=20,
-            img_batch=None,
+            img_batch=img_batch,
         )
 
     else:

@@ -1,9 +1,12 @@
 import os
+import base64
+from io import BytesIO
 from typing import *
 
 from flask import Flask, request, jsonify
 from rq import Queue
 from rq.job import Job
+from PIL import Image
 
 from worker import conn
 from server_utils import single_generation, story_generation
@@ -12,6 +15,20 @@ app = Flask(__name__)
 app.app_context().push()
 
 q = Queue(connection=conn)
+
+
+def base64_to_PIL(base64_encoding: str):
+    return Image.open(BytesIO(base64.b64decode(base64_encoding)))
+
+
+def PIL_to_base64(img):
+    buffer = BytesIO()
+    # img = remove_background(img)
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    data_uri = base64.b64encode(buffer.read()).decode('ascii')
+
+    return data_uri
 
 
 @app.route("/results/<job_key>", methods=['GET'])
@@ -74,6 +91,16 @@ def generate():
         print(f"JOB ID: {job_id}")
 
     else:
+        img_base64_array = request.args.get('imgArray')
+        if img_base64_array is not None:
+            img_base64_list = [
+                f"data:{img}" for img in img_base64_array.split('data:')[1::]
+            ]
+            img_list = [
+                base64_to_PIL(img.split('base64')[1])
+                for img in img_base64_list
+            ]
+
         prompt = request.args.get('prompt')
         generate_video = True if request.args.get(
             'videoGeneration') == 'true' else False
@@ -84,6 +111,7 @@ def generate():
 
         args = (
             prompt,
+            img_list,
             model,
             num_iterations,
             resolution,
@@ -91,6 +119,9 @@ def generate():
             generate_img,
             generate_video,
         )
+
+        # single_generation(*args)
+
         job = q.enqueue_call(
             func=single_generation,
             args=args,
