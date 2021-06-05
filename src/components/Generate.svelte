@@ -43,7 +43,7 @@
                         console.log("DONE!");
                         generationResultDict = results
                         console.log("Generation result dict", generationResultDict);               
-
+                        generatingImage = false;
                         clearInterval(interval)
                     } else {
                         console.log(results.finished);
@@ -61,7 +61,6 @@
         let interval = setInterval(getResults, 2000); 
 
 
-        generatingImage = false;
     }
 </script>
 
