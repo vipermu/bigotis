@@ -16,98 +16,8 @@ from omegaconf import OmegaConf
 # from cmodels.taming.vqgan import VQModel
 from models.taming.vqgan import VQModel
 
-if not os.path.exists('./server/models/taming/last.ckpt'):
-    os.system(
-        " wget 'https://heibox.uni-heidelberg.de/f/867b05fc8c4841768640/?dl=1' -O 'server/models/taming/last.ckpt'"
-    )
 
-if not os.path.exists('./server/models/taming/model.yaml'):
-    os.system(
-        "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
-    )
-
-target_img_size = 512
-embed_size = target_img_size // 16
-dalle_latent_dim = 8192
-
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-print("USING ", DEVICE)
-
-clip_model, clip_preprocess = clip.load("ViT-B/32", device=DEVICE)
-clip_model.eval()
-# NOTE: just adding the normalization transformation
-clip_transform = T.Compose([
-    clip_preprocess.transforms[4],
-])
-
-norm_trans = T.Normalize(
-    (0.48145466, 0.4578275, 0.40821073),
-    (0.26862954, 0.26130258, 0.27577711),
-)
-
-
-def vqgan_preprocess(img):
-    img = img.convert("RGB")
-    img = img.resize((target_img_size, target_img_size), Image.LANCZOS)
-    img = np.asarray(img, dtype=np.float32)
-    img = torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2)
-    img /= 255.
-    # img = 2. * img - 1.
-    img = img.to(DEVICE)
-    img = img[:, :3]
-
-    img = norm_trans(img)
-
-    return img
-
-
-def load_config(config_path, display=False):
-    config = OmegaConf.load(config_path)
-
-    if display:
-        print(yaml.dump(OmegaConf.to_container(config)))
-
-    return config
-
-
-def load_vqgan(config, ckpt_path=None):
-    model = VQModel(**config.model.params)
-
-    ckpt_path = "server/models/taming/last.ckpt"
-    if ckpt_path is not None:
-        sd = torch.load(ckpt_path, map_location="cpu")["state_dict"]
-        missing, unexpected = model.load_state_dict(sd, strict=False)
-
-    return model.eval()
-
-
-def preprocess_vqgan(x):
-    x = 2. * x - 1.
-    return x
-
-
-def custom_to_pil(x):
-    x = x.detach().cpu()
-    x = torch.clamp(x, -1., 1.)
-    x = (x + 1.) / 2.
-    x = x.permute(1, 2, 0).numpy()
-    x = (255 * x).astype(np.uint8)
-    x = Image.fromarray(x)
-
-    if not x.mode == "RGB":
-        x = x.convert("RGB")
-
-    return x
-
-
-def reconstruct_with_vqgan(x, model):
-    # could also use model(x) for reconstruction but use explicit encoding and decoding here
-    z, _, [_, _, indices] = model.encode(x)
-    print(f"VQGAN: latent shape: {z.shape[2:]}")
-    xrec = model.decode(z)
-    return xrec
-
-
+# TODO: put this func into a utils file or something
 def get_stacked_random_crops(img, num_random_crops=64):
     img_size = [img.shape[2], img.shape[3]]
 
@@ -131,160 +41,237 @@ def get_stacked_random_crops(img, num_random_crops=64):
     return img
 
 
-def get_clip_img_encodings(
-    img_batch,
-    do_preprocess=True,
-):
-    if do_preprocess:
-        img_batch = clip_transform(img_batch)
-        img_batch = F.upsample_bilinear(img_batch, (224, 224))
+class TamingDecoder:
+    def __init__(self, ):
+        if not os.path.exists('./server/models/taming/last.ckpt'):
+            os.system(
+                " wget 'https://heibox.uni-heidelberg.de/f/867b05fc8c4841768640/?dl=1' -O 'server/models/taming/last.ckpt'"
+            )
 
-    img_logits = clip_model.encode_image(img_batch)
+        if not os.path.exists('./server/models/taming/model.yaml'):
+            os.system(
+                "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
+            )
 
-    return img_logits
+        self.target_img_size = 400
+        self.embed_size = self.target_img_size // 16
 
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print("USING ", self.device)
 
-def compute_clip_loss(img, text):
-    img_logits = get_clip_img_encodings(img)
+        self.clip_model, self.clip_preprocess = clip.load(
+            "ViT-B/32",
+            device=self.device,
+        )
+        self.clip_model.eval()
+        # NOTE: just adding the normalization transformation
+        self.clip_transform = T.Compose([
+            self.clip_preprocess.transforms[4],
+        ])
 
-    tokenized_text = clip.tokenize([text]).to(DEVICE).detach().clone()
-    text_logits = clip_model.encode_text(tokenized_text)
-
-    loss = -torch.cosine_similarity(text_logits, img_logits).mean()
-
-    return loss
-
-
-config_xl = load_config(
-    "server/models/taming/model.yaml",
-    display=False,
-)
-vqgan_model = load_vqgan(
-    config_xl,
-    ckpt_path="server/models.taming/last.ckpt",
-).to(DEVICE)
-
-
-def generate_from_prompt(
-    prompt: str,
-    lr: float = 0.5,
-    img_save_freq: int = 1,
-    num_generations: int = 200,
-    num_random_crops: int = 20,
-    img_batch=None,
-):
-    batch_size = 1
-
-    z_logits = .5 * torch.randn(
-        batch_size,
-        256,
-        embed_size,
-        embed_size,
-    ).cuda()
-
-    z_logits = torch.nn.Parameter(torch.sinh(1.9 * torch.arcsinh(z_logits)), )
-
-    if img_batch is not None:
-        clip_img_z_logits = get_clip_img_encodings(img)
-        clip_img_z_logits = clip_img_z_logits.detach().clone()
-
-        z, _, [_, _, indices] = vqgan_model.encode(img)
-
-        z_logits = torch.nn.Parameter(z)
-        img_z_logits = z.detach().clone()
-
-    optimizer = torch.optim.AdamW(
-        params=[z_logits],
-        lr=lr,
-        betas=(0.9, 0.999),
-        weight_decay=0.1,
-    )
-
-    gen_img_list = []
-    z_logits_list = []
-
-    for step in range(num_generations):
-        loss = 0
-
-        z = vqgan_model.post_quant_conv(z_logits)
-        x_rec = vqgan_model.decoder(z)
-        x_rec = (x_rec.clip(-1, 1) + 1) / 2
-
-        x_rec_stacked = get_stacked_random_crops(
-            img=x_rec,
-            num_random_crops=num_random_crops,
+        self.norm_trans = T.Normalize(
+            (0.48145466, 0.4578275, 0.40821073),
+            (0.26862954, 0.26130258, 0.27577711),
         )
 
-        loss += 10 * compute_clip_loss(x_rec_stacked, prompt)
+        config_xl = self.load_config(
+            "server/models/taming/model.yaml",
+            display=False,
+        )
+        self.vqgan_model = self.load_vqgan(
+            config_xl,
+            ckpt_path="server/models.taming/last.ckpt",
+        ).to(self.device)
+
+    def vqgan_preprocess(
+        self,
+        img,
+    ):
+        img = img.convert("RGB")
+        img = img.resize((self.target_img_size, self.target_img_size),
+                         Image.LANCZOS)
+        img = np.asarray(img, dtype=np.float32)
+        img = torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2)
+        img /= 255.
+        # img = 2. * img - 1.
+        img = img.to(self.device)
+        img = img[:, :3]
+
+        img = self.norm_trans(img)
+
+        return img
+
+    @staticmethod
+    def load_config(config_path, display=False):
+        config = OmegaConf.load(config_path)
+
+        if display:
+            print(yaml.dump(OmegaConf.to_container(config)))
+
+        return config
+
+    @staticmethod
+    def load_vqgan(
+        config,
+        ckpt_path=None,
+    ):
+        model = VQModel(**config.model.params)
+
+        ckpt_path = "server/models/taming/last.ckpt"
+        if ckpt_path is not None:
+            # XXX: check wtf is going on here
+            sd = torch.load(ckpt_path, map_location="cpu")["state_dict"]
+            missing, unexpected = model.load_state_dict(sd, strict=False)
+
+        return model.eval()
+
+    def get_clip_img_encodings(
+        self,
+        img_batch,
+        do_preprocess=True,
+    ):
+        if do_preprocess:
+            img_batch = self.clip_transform(img_batch)
+            img_batch = F.upsample_bilinear(img_batch, (224, 224))
+
+        img_logits = self.clip_model.encode_image(img_batch)
+
+        return img_logits
+
+    def compute_clip_loss(self, img, text):
+        img_logits = self.get_clip_img_encodings(img)
+
+        tokenized_text = clip.tokenize([text]).to(self.device).detach().clone()
+        text_logits = self.clip_model.encode_text(tokenized_text)
+
+        loss = -torch.cosine_similarity(text_logits, img_logits).mean()
+
+        return loss
+
+    def generate_from_prompt(
+        self,
+        prompt: str,
+        lr: float = 0.5,
+        img_save_freq: int = 1,
+        num_generations: int = 200,
+        num_random_crops: int = 20,
+        img_batch=None,
+    ):
+        batch_size = 1
+
+        z_logits = .5 * torch.randn(
+            batch_size,
+            256,
+            self.embed_size,
+            self.embed_size,
+        ).cuda()
+
+        z_logits = torch.nn.Parameter(
+            torch.sinh(1.9 * torch.arcsinh(z_logits)), )
 
         if img_batch is not None:
-            loss += -10 * torch.cosine_similarity(z_logits,
-                                                  img_z_logits).mean()
-        # if img_batch is not None:
-        #     loss += -10 * torch.cosine_similarity(
-        #         get_clip_img_encodings(x_rec), clip_img_z_logits).mean()
+            clip_img_z_logits = self.get_clip_img_encodings(img)
+            clip_img_z_logits = clip_img_z_logits.detach().clone()
 
-        print(loss)
+            z, _, [_, _, indices] = self.vqgan_model.encode(img)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            z_logits = torch.nn.Parameter(z)
+            img_z_logits = z.detach().clone()
 
-        if step % img_save_freq == 0:
-            print("Saving generation...")
-            x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
-            gen_img_list.append(x_rec_img)
-            z_logits_list.append(z_logits.detach().clone())
+        optimizer = torch.optim.AdamW(
+            params=[z_logits],
+            lr=lr,
+            betas=(0.9, 0.999),
+            weight_decay=0.1,
+        )
 
-            x_rec_img.save(f"test_imgs/{step}.png")
+        gen_img_list = []
+        z_logits_list = []
 
-        torch.cuda.empty_cache()
+        for step in range(num_generations):
+            loss = 0
 
-    return gen_img_list, z_logits_list
-
-
-def interpolate(
-    z_logits_list,
-    duration_list,
-):
-    gen_img_list = []
-    fps = 25
-
-    for idx, (z_logits,
-              duration) in enumerate(zip(z_logits_list, duration_list)):
-        num_steps = int(duration * fps)
-        z_logits_1 = z_logits
-        z_logits_2 = z_logits_list[(idx + 1) % len(z_logits_list)]
-
-        for step in range(num_steps):
-            weight = math.sin(1.5708 * step / num_steps)**2
-            z_logits = weight * z_logits_2 + (1 - weight) * z_logits_1
-
-            z = vqgan_model.post_quant_conv(z_logits)
-            x_rec = vqgan_model.decoder(z)
+            z = self.vqgan_model.post_quant_conv(z_logits)
+            x_rec = self.vqgan_model.decoder(z)
             x_rec = (x_rec.clip(-1, 1) + 1) / 2
 
-            x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
-            gen_img_list.append(x_rec_img)
+            x_rec_stacked = get_stacked_random_crops(
+                img=x_rec,
+                num_random_crops=num_random_crops,
+            )
 
-    return gen_img_list
+            loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
+
+            if img_batch is not None:
+                loss += -10 * torch.cosine_similarity(z_logits,
+                                                      img_z_logits).mean()
+            # if img_batch is not None:
+            #     loss += -10 * torch.cosine_similarity(
+            #         self.get_clip_img_encodings(x_rec), clip_img_z_logits).mean()
+
+            print(loss)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            if step % img_save_freq == 0:
+                print("Saving generation...")
+                x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
+                gen_img_list.append(x_rec_img)
+                z_logits_list.append(z_logits.detach().clone())
+
+                # x_rec_img.save(f"test_imgs/{step}.png")
+
+            torch.cuda.empty_cache()
+
+        return gen_img_list, z_logits_list
+
+    def interpolate(
+        self,
+        z_logits_list,
+        duration_list,
+    ):
+        gen_img_list = []
+        fps = 25
+
+        for idx, (z_logits,
+                  duration) in enumerate(zip(z_logits_list, duration_list)):
+            num_steps = int(duration * fps)
+            z_logits_1 = z_logits
+            z_logits_2 = z_logits_list[(idx + 1) % len(z_logits_list)]
+
+            for step in range(num_steps):
+                weight = math.sin(1.5708 * step / num_steps)**2
+                z_logits = weight * z_logits_2 + (1 - weight) * z_logits_1
+
+                z = self.vqgan_model.post_quant_conv(z_logits)
+                x_rec = self.vqgan_model.decoder(z)
+                x_rec = (x_rec.clip(-1, 1) + 1) / 2
+
+                x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
+                gen_img_list.append(x_rec_img)
+
+        return gen_img_list
 
 
 if __name__ == '__main__':
+    taming_decoder = TamingDecoder()
+
     img_tensor_list = []
     # for img_path in glob.glob("./img_refs/*"):
     #     img = Image.open(img_path)
-    #     img_tensor_list.append(vqgan_preprocess(img))
+    #     img_tensor_list.append(self.vqgan_preprocess(img))
     img_path = glob.glob("./ref_imgs/*")[0]
     img = Image.open(img_path)
-    img_tensor_list.append(vqgan_preprocess(img))
+    img_tensor_list.append(taming_decoder.vqgan_preprocess(img))
 
     img = torch.cat(img_tensor_list)
 
     # img = Image.open('ref_imgs/1.png')
     # img = dalle_img_preprocess(img)
 
-    generate_from_prompt(
+    taming_decoder.generate_from_prompt(
         prompt="CHANEL logo made of roses",
         img_batch=img,
         lr=0.5,
