@@ -6,11 +6,11 @@
     let activeMode = ''
 
     let modelArray = [
-        {
-            value: "dalle",
-            label: "🌴 DALL-E",
-            possibilities: "faces",
-        },
+        // {
+        //     value: "dalle",
+        //     label: "🌴 DALL-E",
+        //     possibilities: "faces",
+        // },
         {
             value: "taming",
             label: "🌎 Taming",
