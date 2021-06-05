@@ -58,9 +58,7 @@
             }
         };
         
-        // let interval = setInterval(getResults, 2000); 
-        getResults()
-
+        let interval = setInterval(getResults, 2000); 
 
     }
 </script>
