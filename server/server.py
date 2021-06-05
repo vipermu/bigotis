@@ -2,7 +2,6 @@ import os
 from typing import *
 
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 from rq import Queue
 from rq.job import Job
 
@@ -10,7 +9,7 @@ from worker import conn
 from server_utils import single_generation, story_generation
 
 app = Flask(__name__)
-CORS(app)
+app.app_context().push()
 
 q = Queue(connection=conn)
 
