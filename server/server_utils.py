@@ -104,6 +104,7 @@ def single_generation(
 
 def story_generation(
     prompt_list,
+    img_list,
     duration_list,
     model,
     num_iterations,
@@ -112,7 +113,7 @@ def story_generation(
 ):
     interp_img_list = []
     interp_feat_list = []
-    for prompt in prompt_list:
+    for idx, prompt in enumerate(prompt_list):
         print(f"USING {model}")
         if model == 'aphantasia':
             gen_img_list, feat_list = aphantasia.generate_from_prompt(
@@ -124,23 +125,35 @@ def story_generation(
             )
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
+
         elif model == 'taming':
             taming_decoder = TamingDecoder()
+            if img_list is not None:
+                img_sublist = [img_list[idx]]
+                img_processed_list = [
+                    taming_decoder.vqgan_preprocess(img) for img in img_sublist
+                ]
+                img_batch = torch.cat(img_processed_list)
+            else:
+                img_batch = None
+
             gen_img_list, feat_list = taming_decoder.generate_from_prompt(
                 prompt=prompt,
                 lr=0.5,
                 img_save_freq=1,
                 num_generations=num_iterations,
                 num_random_crops=20,
-                img_batch=None,
+                img_batch=img_batch,
             )
+
             interp_img_list.append(gen_img_list[-1])
             interp_feat_list.append(feat_list[-1])
+
         elif model == 'stylegan':
             stylegan = StyleGAN()
             gen_img_list, feat_list = stylegan.generate_from_prompt(
                 prompt=prompt,
-                lr=3e-2,
+                lr=6e-3,
                 num_generations=num_iterations,
                 img_save_freq=1,
             )

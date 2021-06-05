@@ -70,11 +70,25 @@ def generate():
         ]
         prompt_list = ['_'.join(prompt.split(' ')) for prompt in prompt_list]
 
+        cond_img_array_base64 = request.args.get('condImgArray')
+        if cond_img_array_base64 is not None:
+            cond_img_array_base64_list = cond_img_array_base64.split(',')
+            cond_img64_list = [
+                cond_img_array_base64_list[idx] +
+                cond_img_array_base64_list[idx + 1]
+                for idx in range(0, len(cond_img_array_base64_list), 2)
+            ]
+            img_list = [
+                base64_to_PIL(img_base64.split('base64')[1])
+                for img_base64 in cond_img64_list
+            ]
+
         out_dir = f"public/generations/{'-'.join(prompt_list)}"
         os.makedirs(out_dir, exist_ok=True)
 
         args = (
             prompt_list,
+            img_list,
             duration_list,
             model,
             num_iterations,
@@ -91,15 +105,9 @@ def generate():
         print(f"JOB ID: {job_id}")
 
     else:
-        img_base64_array = request.args.get('imgArray')
-        if img_base64_array is not None:
-            img_base64_list = [
-                f"data:{img}" for img in img_base64_array.split('data:')[1::]
-            ]
-            img_list = [
-                base64_to_PIL(img.split('base64')[1])
-                for img in img_base64_list
-            ]
+        cond_img_base64 = request.args.get('condImg')
+        if cond_img_base64 is not None:
+            img_list = [base64_to_PIL(cond_img_base64.split('base64')[1])]
 
         prompt = request.args.get('prompt')
         generate_video = True if request.args.get(

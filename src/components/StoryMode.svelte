@@ -1,4 +1,5 @@
 <script>
+    import FileUpload from 'sveltefileuploadcomponent';
     import ModelParams from "./ModelParams.svelte"
     import Generate from "./Generate.svelte"
     import DisplayGeneration from "./DisplayGeneration.svelte"
@@ -16,6 +17,7 @@
 
     let promptArray = ['']
     let durationArray = [[1.5]]
+    let condImgArray = []
 
     let minDuration = 0.5
     let maxDuration = 10
@@ -26,6 +28,7 @@
         numIterations: numIterations[0],
         promptArray:promptArray,
         durationArray:durationArray,
+        condImgArray:condImgArray,
     };
     
     let generationResultDict = {
@@ -46,8 +49,25 @@
     function addPrompt(){
         promptArray.push('')
         durationArray.push([durationArray[durationArray.length-1]])
+        condImgArray.push(undefined)
         promptArray = promptArray
         durationArray = durationArray
+        condImgArray = condImgArray
+    }
+    
+    function handleImgUpload(event, idx) {
+        const files = event.detail.files
+        if (files.length > 1){
+            alert("Only handling one image for now")
+        } else {
+            files.forEach((file) => {
+                let reader = new FileReader()
+                reader.readAsDataURL(file)
+                reader.onload = (e) => {
+                    condImgArray[idx] = e.target.result
+                }
+            })
+        }
     }
 
 </script>
@@ -60,8 +80,20 @@
                 Math.floor(Math.random() * promptPlaceholderArray.length)
             ]}
         />
-        
-        <h3>Duration {durationArray[idx][0]}</h3>
+        {#if typeof condImgArray[idx] == "undefined"}
+            <FileUpload on:input={(e) => handleImgUpload(e, idx)}>
+                <img class="upload hover" src="/upload.png" alt="" />
+            </FileUpload>
+        {:else}
+            <img class="avatar" src={condImgArray[idx]} alt="d" />
+            <button
+                class="hover"
+                on:click={() => condImgArray[idx] = undefined}
+                style="background-color:white;">✖️</button
+            >
+        {/if}
+
+        <h3 style="margin-left: 20pt;">Duration {durationArray[idx][0]}</h3>
         <Slider
             bind:value={durationArray[idx]}
             min={minDuration}
@@ -104,6 +136,23 @@
     }
     .label-container {
         margin-top: 20px;
+    }
+    
+    .hover:hover {
+        opacity: 0.5;
+    }
+
+    .upload {
+        display: flex;
+        height: 30pt;
+        width: 30pt;
+        cursor: pointer;
+        margin-right: 20px;
+    }
+    .avatar {
+        display: flex;
+        height: 200px;
+        width: 200px;
     }
 
 </style>

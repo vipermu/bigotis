@@ -16,7 +16,7 @@
         'videoUrl': '',
     }
     
-    let imgArray = []
+    let condImg
 
     $: genImgUrl = generationResultDict['imgUrl'];
     $: genVideoUrl = generationResultDict['videoUrl'];
@@ -28,7 +28,7 @@
             prompt: prompt,
             model: selectedModel.value,
             numIterations: numIterations[0],
-            imgArray: imgArray,
+            condImg: condImg,
         };
     
     $: if(numIterations){
@@ -36,7 +36,7 @@
     }
 
     $: if (prompt){ generationParams['prompt'] = prompt }
-    $: if (imgArray){ generationParams['imgArray'] = imgArray }
+    $: if (condImg){ generationParams['condImg'] = condImg }
 
     $: generationReady = generationParams['imageGeneration'] || generationParams['videoGeneration'];
     
@@ -59,7 +59,7 @@
                 let reader = new FileReader()
                 reader.readAsDataURL(file)
                 reader.onload = (e) => {
-                    imgArray = [e.target.result]
+                    condImg = e.target.result
                 }
             })
         }
@@ -80,20 +80,19 @@
     <h3>
         You can condition your Generation with an image:
     </h3>
-    {#if imgArray.length == 0}
+    {#if typeof condImg == "undefined"}
         <FileUpload on:input={handleImgUpload}>
             <img class="upload hover" src="/upload.png" alt="" />
         </FileUpload>
-    {/if}
-
-    {#each imgArray as img}
-        <img class="avatar" src={img} alt="d" />
+    {:else}
+        <img class="avatar" src={condImg} alt="d" />
         <button
             class="hover"
-            on:click={() => imgArray = []}
+            on:click={() => condImg = undefined}
             style="background-color:white;">✖️</button
         >
-    {/each}
+    {/if}
+
 {/if}
 
 {#if prompt != ""}
