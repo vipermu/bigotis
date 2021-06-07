@@ -6,11 +6,11 @@
     let activeMode = ''
 
     let modelArray = [
-        {
-            value: "dalle",
-            label: "🌴 DALL-E",
-            possibilities: "faces",
-        },
+        // {
+        //     value: "dalle",
+        //     label: "🌴 DALL-E",
+        //     possibilities: "faces",
+        // },
         {
             value: "taming",
             label: "🌎 Taming",
@@ -28,7 +28,7 @@
         },
     ];
    
-    let selectedModel = modelArray[1];
+    let selectedModel = modelArray[0];
 
     function handleSelect(event) {
         selectedModel = event.detail;

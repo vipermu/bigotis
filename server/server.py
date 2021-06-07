@@ -1,184 +1,54 @@
 import os
+import base64
+from io import BytesIO
 from typing import *
 
-import imageio
-import numpy as np
 from flask import Flask, request, jsonify
+from rq import Queue
+from rq.job import Job
+from PIL import Image
 
-from models.taming import taming_decoder
-from models import dalle_decoder, aphantasia, stylegan
+from worker import conn
+from server_utils import single_generation, story_generation
 
 app = Flask(__name__)
+app.app_context().push()
+
+q = Queue(connection=conn)
 
 
-def single_generation(
-    prompt,
-    model,
-    num_iterations,
-    resolution,
-    out_dir,
-    generate_img,
-    generate_video,
-):
-    img_url = ''
-    video_url = ''
+def base64_to_PIL(base64_encoding: str):
+    return Image.open(BytesIO(base64.b64decode(base64_encoding)))
 
-    if model == 'dalle':
-        gen_img_list = dalle_decoder.generate_from_prompt(
-            prompt=prompt,
-            lr=0.7,
-            num_generations=num_iterations,
-            img_save_freq=1,
-        )
 
-    elif model == 'aphantasia':
-        gen_img_list, feat_list = aphantasia.generate_from_prompt(
-            prompt=prompt,
-            lr=0.9,
-            num_generations=num_iterations,
-            img_save_freq=1,
-            resolution=resolution,
-        )
-    elif model == 'stylegan':
-        gen_img_list, feat_list = stylegan.generate_from_prompt(
-            prompt=prompt,
-            lr=3e-2,
-            num_generations=num_iterations,
-            img_save_freq=1,
-        )
-    elif model == 'taming':
-        gen_img_list, feat_list = taming_decoder.generate_from_prompt(
-            prompt=prompt,
-            lr=0.5,
-            img_save_freq=1,
-            num_generations=num_iterations,
-            num_random_crops=20,
-            img_batch=None,
-        )
+def PIL_to_base64(img):
+    buffer = BytesIO()
+    # img = remove_background(img)
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+    data_uri = base64.b64encode(buffer.read()).decode('ascii')
 
+    return data_uri
+
+
+@app.route("/results/<job_key>", methods=['GET'])
+def get_results(job_key):
+    job = Job.fetch(job_key, connection=conn)
+
+    print(job.is_finished)
+    if job.is_finished:
+        response = job.result
+        response['finished'] = "yup"
     else:
-        response = jsonify(
-            success=False,
-            error="MODEL NOT RECOGNIZED",
-        )
-        return response
+        response = {
+            "finished": "Not yet bro!",
+            "status": 202,
+        }
 
-    if generate_img:
-        out_img_path = f"{out_dir}/img.png"
+    json_response = jsonify(response)
+    json_response.headers.add('Access-Control-Allow-Origin', '*')
 
-        generated_img = gen_img_list[-1]
-        generated_img.save(out_img_path)
-
-        img_url = '/'.join(out_img_path.split('/')[1:])
-
-    if generate_video:
-        out_video_path = f"{out_dir}/video.mp4"
-        writer = imageio.get_writer(out_video_path, fps=5)
-
-        for pil_img in gen_img_list:
-            img = np.array(pil_img)
-            writer.append_data(img)
-
-        writer.close()
-
-        video_url = '/'.join(out_video_path.split('/')[1:])
-
-    response = jsonify(
-        success=True,
-        imgUrl=img_url,
-        videoUrl=video_url,
-    )
-
-    return response
-
-
-def story_generation(
-    prompt_list,
-    duration_list,
-    model,
-    num_iterations,
-    resolution,
-    out_dir,
-):
-    interp_img_list = []
-    interp_feat_list = []
-    for prompt in prompt_list:
-        print(f"USING {model}")
-        if model == 'aphantasia':
-            gen_img_list, feat_list = aphantasia.generate_from_prompt(
-                prompt=prompt,
-                lr=0.8,
-                num_generations=num_iterations,
-                img_save_freq=1,
-                resolution=resolution,
-            )
-            interp_img_list.append(gen_img_list[-1])
-            interp_feat_list.append(feat_list[-1])
-        elif model == 'taming':
-            gen_img_list, feat_list = taming_decoder.generate_from_prompt(
-                prompt=prompt,
-                lr=0.5,
-                img_save_freq=1,
-                num_generations=num_iterations,
-                num_random_crops=20,
-                img_batch=None,
-            )
-            interp_img_list.append(gen_img_list[-1])
-            interp_feat_list.append(feat_list[-1])
-        elif model == 'stylegan':
-            gen_img_list, feat_list = stylegan.generate_from_prompt(
-                prompt=prompt,
-                lr=3e-2,
-                num_generations=num_iterations,
-                img_save_freq=1,
-            )
-            interp_img_list.append(gen_img_list[-1])
-            interp_feat_list.append(feat_list[-1])
-
-        else:
-            response = jsonify(
-                success=False,
-                error="MODEL NOT RECOGNIZED",
-            )
-            return response
-
-    if model == 'aphantasia':
-        interp_result_img_list = aphantasia.interpolate(
-            interp_feat_list,
-            duration_list,
-            resolution=resolution,
-        )
-
-    elif model == 'taming':
-        interp_result_img_list = taming_decoder.interpolate(
-            interp_feat_list,
-            duration_list,
-        )
-
-    elif model == 'stylegan':
-        interp_result_img_list = stylegan.interpolate(
-            interp_feat_list,
-            duration_list,
-        )
-
-    out_video_path = f"{out_dir}/interpolation.mp4"
-    writer = imageio.get_writer(out_video_path, fps=25)
-
-    for pil_img in interp_result_img_list:
-        img = np.array(pil_img)
-        writer.append_data(img)
-
-    writer.close()
-
-    video_url = '/'.join(out_video_path.split('/')[1:])
-
-    response = jsonify(
-        success=True,
-        imgUrl='',
-        videoUrl=video_url,
-    )
-
-    return response
+    return json_response
 
 
 @app.route(
@@ -191,6 +61,7 @@ def generate():
     num_iterations = int(request.args.get('numIterations'))
     resolution = request.args.get('resolution')
     model = request.args.get('model')
+    job_id = -1
 
     if request.args.get('storyGeneration') == 'true':
         prompt_list = request.args.get('promptArray').split(',')
@@ -199,18 +70,45 @@ def generate():
         ]
         prompt_list = ['_'.join(prompt.split(' ')) for prompt in prompt_list]
 
+        cond_img_array_base64 = request.args.get('condImgArray')
+        if cond_img_array_base64 is not None:
+            cond_img_array_base64_list = cond_img_array_base64.split(',')
+            cond_img64_list = [
+                cond_img_array_base64_list[idx] +
+                cond_img_array_base64_list[idx + 1]
+                for idx in range(0, len(cond_img_array_base64_list), 2)
+            ]
+            img_list = [
+                base64_to_PIL(img_base64.split('base64')[1])
+                for img_base64 in cond_img64_list
+            ]
+
         out_dir = f"public/generations/{'-'.join(prompt_list)}"
         os.makedirs(out_dir, exist_ok=True)
 
-        response = story_generation(
+        args = (
             prompt_list,
+            img_list,
             duration_list,
             model,
             num_iterations,
             resolution,
             out_dir,
         )
+
+        job = q.enqueue_call(
+            func=story_generation,
+            args=args,
+            result_ttl=5000,
+        )
+        job_id = job.get_id()
+        print(f"JOB ID: {job_id}")
+
     else:
+        cond_img_base64 = request.args.get('condImg')
+        if cond_img_base64 is not None:
+            img_list = [base64_to_PIL(cond_img_base64.split('base64')[1])]
+
         prompt = request.args.get('prompt')
         generate_video = True if request.args.get(
             'videoGeneration') == 'true' else False
@@ -219,8 +117,9 @@ def generate():
         out_dir = f"public/generations/{prompt}"
         os.makedirs(out_dir, exist_ok=True)
 
-        response = single_generation(
+        args = (
             prompt,
+            img_list,
             model,
             num_iterations,
             resolution,
@@ -228,6 +127,21 @@ def generate():
             generate_img,
             generate_video,
         )
+
+        # single_generation(*args)
+
+        job = q.enqueue_call(
+            func=single_generation,
+            args=args,
+            result_ttl=5000,
+        )
+        job_id = job.get_id()
+        print(f"JOB ID: {job_id}")
+
+    response = jsonify(
+        success=True,
+        jobId=job_id,
+    )
 
     response.headers.add('Access-Control-Allow-Origin', '*')
 
