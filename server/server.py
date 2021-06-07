@@ -71,7 +71,7 @@ def generate():
         prompt_list = ['_'.join(prompt.split(' ')) for prompt in prompt_list]
 
         cond_img_array_base64 = request.args.get('condImgArray')
-        if cond_img_array_base64 is not None:
+        if cond_img_array_base64 != "":
             cond_img_array_base64_list = cond_img_array_base64.split(',')
             cond_img64_list = [
                 cond_img_array_base64_list[idx] +
@@ -82,6 +82,8 @@ def generate():
                 base64_to_PIL(img_base64.split('base64')[1])
                 for img_base64 in cond_img64_list
             ]
+        else:
+            img_list = None
 
         out_dir = f"public/generations/{'-'.join(prompt_list)}"
         os.makedirs(out_dir, exist_ok=True)
@@ -106,8 +108,10 @@ def generate():
 
     else:
         cond_img_base64 = request.args.get('condImg')
-        if cond_img_base64 is not None:
+        if cond_img_base64 != "undefined":
             img_list = [base64_to_PIL(cond_img_base64.split('base64')[1])]
+        else:
+            img_list = None
 
         prompt = request.args.get('prompt')
         generate_video = True if request.args.get(
@@ -127,8 +131,6 @@ def generate():
             generate_img,
             generate_video,
         )
-
-        # single_generation(*args)
 
         job = q.enqueue_call(
             func=single_generation,

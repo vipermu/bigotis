@@ -8,10 +8,12 @@ export let promptPlaceholderArray = [
     "Flowers made of diamonds",
 ];
 
-export let serverIP = "3.133.151.17"
+// // SERVER CONFIG
+export let serverIP = "3.16.56.243"
 export let apiPort = "8000"
 export let contentPort = "8001"
 
+// // LOCAL CONFIG
 // export let serverIP = "localhost"
 // export let apiPort = "8000"
 // export let contentPort = "8001"
