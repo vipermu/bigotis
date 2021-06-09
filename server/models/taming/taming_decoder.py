@@ -53,7 +53,7 @@ class TamingDecoder:
                 "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
             )
 
-        self.target_img_size = 512
+        self.target_img_size = 256
         self.embed_size = self.target_img_size // 16
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -191,6 +191,10 @@ class TamingDecoder:
 
         for step in range(num_generations):
             loss = 0
+            
+            if step % img_save_freq == 0:
+                print("Adding logits...")
+                z_logits_list.append(z_logits.detach().clone())
 
             z = self.vqgan_model.post_quant_conv(z_logits)
             x_rec = self.vqgan_model.decoder(z)
@@ -198,7 +202,7 @@ class TamingDecoder:
 
             x_rec_stacked = get_stacked_random_crops(
                 img=x_rec,
-                num_random_crops=num_random_crops,
+                num_random_crops=num_ranz_logitsdom_crops,
             )
 
             loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
@@ -217,10 +221,9 @@ class TamingDecoder:
             optimizer.step()
 
             if step % img_save_freq == 0:
-                print("Saving generation...")
+                print("Adding img...")
                 x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
                 gen_img_list.append(x_rec_img)
-                z_logits_list.append(z_logits.detach().clone())
 
                 # x_rec_img.save(f"test_imgs/{step}.png")
 
@@ -273,8 +276,10 @@ if __name__ == '__main__':
     # img = Image.open('ref_imgs/1.png')
     # img = dalle_img_preprocess(img)
 
-    taming_decoder.generate_from_prompt(
+    gen_img_list, z_logits_list = taming_decoder.generate_from_prompt(
         prompt="CHANEL logo made of roses",
         img_batch=img,
         lr=0.5,
+        num_generations=1
     )
+    gen_img_list = taming_decoder.interpolate(z_logits_list, [2])
