@@ -1,13 +1,12 @@
 <script>
     import Slider from "@bulatdashiev/svelte-slider";
 
-    export let selectedModel
+    export let selectedModel;
 
     export let numIterations = [50];
-    export let iterationRange = [10, 500];
+    export let iterationRange = [1, 500];
     export let selectedResolution = [1024, 1024];
     export let resolutionRange = [200, 4000];
-
 </script>
 
 <h3>{numIterations} iterations</h3>
@@ -33,5 +32,4 @@
 {/if}
 
 <style>
-
 </style>
