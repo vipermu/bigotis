@@ -81,29 +81,17 @@ def single_generation(
 
         img_url = '/'.join(out_img_path.split('/')[1:])
 
-    # if generate_video:
-    #     out_video_path = f"{out_dir}/video.mp4"
-    #     writer = imageio.get_writer(out_video_path, fps=5)
-
-    #     for pil_img in gen_img_list:
-    #         img = np.array(pil_img, dtype=np.uint8)
-    #         writer.append_data(img)
-
-    #     writer.close()
-
-    #     video_url = '/'.join(out_video_path.split('/')[1:])
-    
     if generate_video:
-        out_video_path = f"{out_dir}/video.gif"
-        gen_img_list[0].save(
-            out_video_path,
-            save_all=True, 
-            append_images=gen_img_list[1:], 
-            # optimize=False, 
-            # duration=40, 
-            loop=0,
-        )
-        
+        out_video_path = f"{out_dir}/video.mp4"
+        writer = imageio.get_writer(out_video_path, fps=5)
+
+        for pil_img in gen_img_list:
+            img = np.array(pil_img, dtype=np.uint8)
+            writer.append_data(img)
+
+        writer.close()
+
+        video_url = '/'.join(out_video_path.split('/')[1:])
 
     response = {
         'success': True,
@@ -200,25 +188,16 @@ def story_generation(
             duration_list,
         )
 
-    # out_video_path = f"{out_dir}/interpolation.mp4"
-    # writer = imageio.get_writer(out_video_path, fps=25)
-
-    # for pil_img in interp_result_img_list:
-    #     img = np.array(pil_img)
-    #     writer.append_data(img)
-
-    # writer.close()
+    out_video_path = f"{out_dir}/interpolation.mp4"
     
-    out_video_path = f"{out_dir}/video.gif"
-    gen_img_list[0].save(
-        out_video_path,
-        save_all=True, 
-        append_images=gen_img_list[1:], 
-        # optimize=False, 
-        # duration=40, 
-        loop=0,
-    )
+    writer = imageio.get_writer(out_video_path, fps=25)
 
+    for pil_img in interp_result_img_list:
+        img = np.array(pil_img, dtype=np.uint8)
+        writer.append_data(img)
+
+    writer.close()
+    
     video_url = '/'.join(out_video_path.split('/')[1:])
 
     response = {
