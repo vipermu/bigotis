@@ -17,8 +17,16 @@
         fetchURL.search = new URLSearchParams(generationParams).toString();
         let jobId = undefined;
 
+        let waiting = false;
+
         const getResults = async () => {
+            if (waiting) {
+                return;
+            }
+
             if (typeof jobId == "undefined") {
+                waiting = true;
+
                 console.log("FETCHING DATA");
                 const res = await fetch(fetchURL.toString(), {
                     method: "GET",
@@ -28,6 +36,7 @@
                 console.log("JOB RESULTS", jobResults);
                 jobId = jobResults.jobId;
             } else {
+                waiting = true;
                 try {
                     console.log("FETCHING RESULTS");
                     let resultsURL = new URL(`${serverURL}/results/${jobId}`);
@@ -58,9 +67,10 @@
                     console.log(err);
                 }
             }
+            waiting = false;
         };
 
-        let interval = setInterval(getResults, 5000);
+        let interval = setInterval(getResults, 2000);
         // getResults()
     }
 </script>
