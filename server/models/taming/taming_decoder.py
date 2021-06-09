@@ -202,7 +202,7 @@ class TamingDecoder:
 
             x_rec_stacked = get_stacked_random_crops(
                 img=x_rec,
-                num_random_crops=num_ranz_logitsdom_crops,
+                num_random_crops=num_random_crops,
             )
 
             loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
