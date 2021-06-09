@@ -53,7 +53,7 @@ class TamingDecoder:
                 "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
             )
 
-        self.target_img_size = 512
+        self.target_img_size = 256
         self.embed_size = self.target_img_size // 16
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -88,19 +88,20 @@ class TamingDecoder:
         img,
     ):
         img = img.convert("RGB")
-        img = img.resize((self.target_img_size, self.target_img_size),
-                         Image.LANCZOS)
-        img = np.asarray(img, dtype=np.float32)
-        img = torch.tensor(img).unsqueeze(0).permute(0, 3, 1, 2)
-        img /= 255.
-        # img = 2. * img - 1.
-        img = img.to(self.device)
-        img = img[:, :3]
 
-        img = self.norm_trans(img)
+        min_img_dim = min(img.size)
 
-        return img
+        scale_factor = self.target_img_size / min_img_dim
+        scaled_img_dim = (round(scale_factor * img.size[0]),
+                        round(scale_factor * img.size[1]))
+        img = img.resize(scaled_img_dim, Image.LANCZOS)
+        img = TF.center_crop(img, output_size=2 * [self.target_img_size])
+        img_tensor = torch.unsqueeze(T.ToTensor()(img), 0).to(self.device)
 
+        img_tensor = 2. * img_tensor - 1.
+
+        return img_tensor
+    
     @staticmethod
     def load_config(config_path, display=False):
         config = OmegaConf.load(config_path)
@@ -262,7 +263,8 @@ if __name__ == '__main__':
     # for img_path in glob.glob("./img_refs/*"):
     #     img = Image.open(img_path)
     #     img_tensor_list.append(self.vqgan_preprocess(img))
-    img_path = glob.glob("./ref_imgs/*")[0]
+
+    img_path = "/home/vicc/Downloads/papagei2.jpg"
     img = Image.open(img_path)
     img_tensor_list.append(taming_decoder.vqgan_preprocess(img))
 
