@@ -53,7 +53,7 @@ class TamingDecoder:
                 "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
             )
 
-        self.target_img_size = 512
+        self.target_img_size = 256
         self.embed_size = self.target_img_size // 16
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
