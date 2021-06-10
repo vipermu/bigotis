@@ -103,7 +103,6 @@ def generate():
             args=args,
             result_ttl=5000,
             timeout=5000,
-            job_timeout=5000,
         )
         job_id = job.get_id()
         print(f"JOB ID: {job_id}")
@@ -139,7 +138,6 @@ def generate():
             args=args,
             result_ttl=5000,
             timeout=5000,
-            job_timeout=5000,
         )
         job_id = job.get_id()
         print(f"JOB ID: {job_id}")
