@@ -57,9 +57,14 @@ def single_generation(
         else:
             img_batch = None
 
+        if img_batch is not None:
+            lr = 0.2
+        else:
+            lr = 0.5
+
         gen_img_list, _feat_list = taming_decoder.generate_from_prompt(
             prompt=prompt,
-            lr=0.5,
+            lr=lr,
             img_save_freq=1,
             num_generations=num_iterations,
             num_random_crops=20,
@@ -136,10 +141,15 @@ def story_generation(
                 img_batch = torch.cat(img_processed_list)
             else:
                 img_batch = None
-
+            
+            if img_batch is not None:
+                lr = 0.2
+            else:
+                lr = 0.5
+            
             gen_img_list, feat_list = taming_decoder.generate_from_prompt(
                 prompt=prompt,
-                lr=0.5,
+                lr=lr,
                 img_save_freq=1,
                 num_generations=num_iterations,
                 num_random_crops=20,
