@@ -58,7 +58,7 @@ def single_generation(
             img_batch = None
 
         if img_batch is not None:
-            lr = 0.5
+            lr = 0.25
         else:
             lr = 0.5
 
@@ -143,7 +143,7 @@ def story_generation(
                 img_batch = None
             
             if img_batch is not None:
-                lr = 0.5
+                lr = 0.25
             else:
                 lr = 0.5
             
