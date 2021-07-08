@@ -9,7 +9,7 @@ export let promptPlaceholderArray = [
 ];
 
 // // SERVER CONFIG
-export let serverIP = "3.16.56.243"
+export let serverIP = "18.119.109.46"
 export let apiPort = "8000"
 export let contentPort = "8001"
 
