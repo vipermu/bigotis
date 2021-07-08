@@ -53,7 +53,7 @@ class TamingDecoder:
                 "wget 'https://heibox.uni-heidelberg.de/f/274fb24ed38341bfa753/?dl=1' -O 'server/models/taming/model.yaml'"
             )
 
-        self.target_img_size = 512
+        self.target_img_size = 256
         self.embed_size = self.target_img_size // 16
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -82,6 +82,38 @@ class TamingDecoder:
             config_xl,
             ckpt_path="server/models.taming/last.ckpt",
         ).to(self.device)
+        
+        self.aug_transform = torch.nn.Sequential(
+            T.RandomHorizontalFlip(),
+            T.RandomAffine(24, (.1, .1)),
+        ).cuda()
+
+    def augment(self, into, cutn=32): #into: 1x3x400x688
+        crop_scaler = 1
+        #pdb.set_trace()
+        into = torch.nn.functional.pad(into, (self.target_img_size//2, self.target_img_size//2, self.target_img_size//2, self.target_img_size//2), mode='constant', value=0)
+        #into: 1 x 3 x 800 x 1088
+
+        into = self.aug_transform(into) #RandomHorizontalFlip and RandomAffine
+
+        p_s = []
+        for ch in range(cutn):
+            size = int(torch.normal(1.2, .3, ()).clip(.43, 1.9) * self.target_img_size) #433
+            
+            if ch > cutn - 4:
+                size = int(self.target_img_size*1.4)
+
+            offsetx = torch.randint(0, int(self.target_img_size*2 - size), ())
+            offsety = torch.randint(0, int(self.target_img_size*2 - size), ())
+            apper = into[:, :, offsetx:offsetx + size, offsety:offsety + size]
+            apper = torch.nn.functional.interpolate(apper, (int(224*crop_scaler), int(224*crop_scaler)), mode='bilinear', align_corners=True)
+            p_s.append(apper)
+        into = torch.cat(p_s, 0)
+
+        up_noise = 0.11
+        into = into + up_noise*torch.rand((into.shape[0], 1, 1, 1)).cuda()*torch.randn_like(into, requires_grad=False)
+
+        return into
 
     def vqgan_preprocess(
         self,
@@ -132,7 +164,8 @@ class TamingDecoder:
         do_preprocess=True,
     ):
         if do_preprocess:
-            img_batch = self.clip_transform(img_batch)
+            # img_batch = self.clip_transform(img_batch)
+            img_batch = self.norm_trans(img_batch)
             img_batch = F.upsample_bilinear(img_batch, (224, 224))
 
         img_logits = self.clip_model.encode_image(img_batch)
@@ -145,9 +178,12 @@ class TamingDecoder:
         tokenized_text = clip.tokenize([text]).to(self.device).detach().clone()
         text_logits = self.clip_model.encode_text(tokenized_text)
 
+        text_logits = text_logits / text_logits.norm(dim=-1, keepdim=True)
+
         loss = -torch.cosine_similarity(text_logits, img_logits).mean()
 
         return loss
+
 
     def generate_from_prompt(
         self,
@@ -199,11 +235,12 @@ class TamingDecoder:
             z = self.vqgan_model.post_quant_conv(z_logits)
             x_rec = self.vqgan_model.decoder(z)
             x_rec = (x_rec.clip(-1, 1) + 1) / 2
+            x_rec_stacked = self.augment(x_rec)
 
-            x_rec_stacked = get_stacked_random_crops(
-                img=x_rec,
-                num_random_crops=num_random_crops,
-            )
+            # x_rec_stacked = get_stacked_random_crops(
+            #     img=x_rec,
+            #     num_random_crops=num_random_crops,
+            # )
 
             loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
 
@@ -225,7 +262,7 @@ class TamingDecoder:
                 x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
                 gen_img_list.append(x_rec_img)
 
-                # x_rec_img.save(f"test_imgs/{step}.png")
+                x_rec_img.save(f"generations/{step}.png")
 
             torch.cuda.empty_cache()
 
@@ -267,19 +304,21 @@ if __name__ == '__main__':
     #     img = Image.open(img_path)
     #     img_tensor_list.append(self.vqgan_preprocess(img))
 
-    img_path = "/home/vicc/Downloads/papagei2.jpg"
-    img = Image.open(img_path)
-    img_tensor_list.append(taming_decoder.vqgan_preprocess(img))
+    # img_path = "/home/vicc/Downloads/papagei2.jpg"
+    # img = Image.open(img_path)
+    # img_tensor_list.append(taming_decoder.vqgan_preprocess(img))
 
-    img = torch.cat(img_tensor_list)
+    # img = torch.cat(img_tensor_list)
+
+    img = None
 
     # img = Image.open('ref_imgs/1.png')
     # img = dalle_img_preprocess(img)
 
     gen_img_list, z_logits_list = taming_decoder.generate_from_prompt(
-        prompt="CHANEL logo made of roses",
+        prompt="import tensorflow as tf",
         img_batch=img,
         lr=0.5,
-        num_generations=1
+        num_generations=100
     )
-    gen_img_list = taming_decoder.interpolate(z_logits_list, [2])
+    gen_img_list = taming_decoder.interpolate(z_logits_list, [2])# 

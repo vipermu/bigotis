@@ -35,7 +35,7 @@ parser.add_argument(
 parser.add_argument(
     '--lr',
     type=float,
-    default=1e-2,
+    default=3e-2,
     help='',
 )
 parser.add_argument(
@@ -194,3 +194,8 @@ class StyleGAN:
                 gen_img_list.append(img)
 
         return gen_img_list
+
+
+if __name__ == "__main__":
+    stylegan = StyleGAN()
+    stylegan.generate_from_prompt("An angry face")
