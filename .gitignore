@@ -11,6 +11,9 @@ public/generations/*
 *.mp4
 *.pt
 *.pth
+*.jpg
+*.png
+*.gif
 
 ref_imgs
 img-refs

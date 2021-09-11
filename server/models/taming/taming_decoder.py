@@ -88,7 +88,7 @@ class TamingDecoder:
             T.RandomAffine(24, (.1, .1)),
         ).cuda()
 
-    def augment(self, into, cutn=32): #into: 1x3x400x688
+    def augment(self, into, cutn=20): #into: 1x3x400x688
         crop_scaler = 1
         #pdb.set_trace()
         into = torch.nn.functional.pad(into, (self.target_img_size//2, self.target_img_size//2, self.target_img_size//2, self.target_img_size//2), mode='constant', value=0)
@@ -169,6 +169,7 @@ class TamingDecoder:
             img_batch = F.upsample_bilinear(img_batch, (224, 224))
 
         img_logits = self.clip_model.encode_image(img_batch)
+        img_logits = img_logits / img_logits.norm(dim=-1, keepdim=True)
 
         return img_logits
 
@@ -190,8 +191,8 @@ class TamingDecoder:
         prompt: str,
         lr: float = 0.5,
         img_save_freq: int = 1,
-        num_generations: int = 200,
-        num_random_crops: int = 20,
+        num_generations: int = 100,
+        num_random_crops: int = 32,
         img_batch=None,
     ):
         batch_size = 1
@@ -244,9 +245,9 @@ class TamingDecoder:
 
             loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
 
-            if img_batch is not None:
-                loss += -10 * torch.cosine_similarity(z_logits,
-                                                      img_z_logits).mean()
+            # if img_batch is not None:
+            #     loss += -10 * torch.cosine_similarity(z_logits,
+            #                                           img_z_logits).mean()
             # if img_batch is not None:
             #     loss += -10 * torch.cosine_similarity(
             #         self.get_clip_img_encodings(x_rec), clip_img_z_logits).mean()
@@ -265,6 +266,8 @@ class TamingDecoder:
                 x_rec_img.save(f"generations/{step}.png")
 
             torch.cuda.empty_cache()
+
+        torch.save(z_logits, f'{prompt}_logits.pt')
 
         return gen_img_list, z_logits_list
 
@@ -294,6 +297,90 @@ class TamingDecoder:
                 gen_img_list.append(x_rec_img)
 
         return gen_img_list
+    
+    def generate_video_from_prompt(
+        self,
+        prompt: str,
+        init_latent:torch.Tensor,
+        lr: float = 0.3,
+        num_generations: int = 1000,
+        num_random_crops: int = 16,
+        num_zoom_interp_steps=4,
+        num_zoom_train_steps=4,
+        zoom_offset = 16,
+    ):
+        z_logits = init_latent.detach().clone()
+        z_logits = torch.nn.Parameter(z_logits)
+
+        optimizer = torch.optim.AdamW(
+            params=[z_logits],
+            lr=lr,
+            betas=(0.9, 0.999),
+            weight_decay=0.1,
+        )
+                
+
+        gen_img_list = []
+        z_logits_list = []
+        for step in range(num_generations):
+            with torch.no_grad():
+
+                z = self.vqgan_model.post_quant_conv(z_logits)
+                x_rec = self.vqgan_model.decoder(z)
+                x_rec = (x_rec.clip(-1, 1) + 1) / 2
+                
+                x_rec_size = x_rec.shape[-1]
+
+                x_rec_zoom = x_rec[:, :, zoom_offset:-zoom_offset, zoom_offset:-zoom_offset]
+                x_rec_zoom = torch.nn.functional.interpolate(x_rec_zoom, (x_rec_size, x_rec_size), mode="bilinear",)
+                
+                x_rec_zoom = 2. * x_rec_zoom - 1
+                zoom_z_logits, _, [_, _, indices] = self.vqgan_model.encode(x_rec_zoom)
+                
+                z_logits.data = zoom_z_logits.clone().detach()
+
+            for zoom_train_step in range(num_zoom_train_steps):
+                loss = 0
+                z = self.vqgan_model.post_quant_conv(z_logits)
+                x_rec = self.vqgan_model.decoder(z)
+                x_rec = (x_rec.clip(-1, 1) + 1) / 2
+                x_rec_stacked = self.augment(x_rec,)
+
+                loss += 10 * self.compute_clip_loss(x_rec_stacked, prompt)
+
+                print(loss)
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                # print("Adding img...")
+                # x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
+                # x_rec_img.save(f"generations/{step}_{zoom_train_step}.jpg")
+                
+            z_logits_1 = init_latent
+            z_logits_2= z_logits
+
+            for zoom_step in range(num_zoom_interp_steps):
+                weight = zoom_step/num_zoom_interp_steps
+                interp_logits = weight * z_logits_2 + (1 - weight) * z_logits_1
+
+                with torch.no_grad():
+                    z = self.vqgan_model.post_quant_conv(interp_logits)
+                    x_rec = self.vqgan_model.decoder(z)
+                    x_rec = (x_rec.clip(-1, 1) + 1) / 2
+                    
+                print("Adding img...")
+                x_rec_img = T.ToPILImage(mode='RGB')(x_rec[0])
+                gen_img_list.append(x_rec_img)
+
+                x_rec_img.save(f"generations/{step}_{zoom_step}.jpg")
+
+            init_latent = z_logits.detach().clone()
+
+            torch.cuda.empty_cache()
+
+        return gen_img_list, z_logits_list
 
 
 if __name__ == '__main__':
@@ -314,11 +401,22 @@ if __name__ == '__main__':
 
     # img = Image.open('ref_imgs/1.png')
     # img = dalle_img_preprocess(img)
+    prompt='Creepy Disney ghosts dancing in the fire'
 
-    gen_img_list, z_logits_list = taming_decoder.generate_from_prompt(
-        prompt="import tensorflow as tf",
-        img_batch=img,
-        lr=0.5,
-        num_generations=100
+    # gen_img_list, z_logits_list = taming_decoder.generate_from_prompt(
+    #     prompt=prompt,
+    #     img_batch=img,
+    #     lr=0.5,
+    #     num_generations=200,
+    # )
+    
+    # torch.cuda.empty_cache()
+    
+    init_latent_path = f"./{prompt}_logits.pt"
+    init_latent = torch.load(init_latent_path).to('cuda')
+    gen_img_list, z_logits_list = taming_decoder.generate_video_from_prompt(
+        prompt=prompt,
+        init_latent=init_latent,
+        lr=0.2,
     )
     gen_img_list = taming_decoder.interpolate(z_logits_list, [2])# 

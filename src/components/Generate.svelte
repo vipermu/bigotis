@@ -72,6 +72,7 @@
 
         let interval = setInterval(getResults, 2000);
         // getResults()
+        
     }
 </script>
 

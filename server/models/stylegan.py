@@ -113,13 +113,20 @@ class StyleGAN:
         img,
         text,
     ):
+        img = ((img + 1) /2).clip(0,1)
         # img = self.clip_transform(img)
+        img = self.clip_normalize(img)
         img = torch.nn.functional.upsample_bilinear(img, (224, 224))
         tokenized_text = clip.tokenize([text]).to(self.device)
 
-        img_logits, _text_logits = self.clip_model(img, tokenized_text)
+        img_logits = self.clip_model.encode_image(img)
+        text_logits = self.clip_model.encode_text(tokenized_text)
 
-        return 1 / img_logits * 100
+        # img_logits, _text_logits = self.clip_model(img, tokenized_text)
+
+        loss = torch.cosine_similarity(img_logits, text_logits)
+
+        return -10 * loss
 
     def generate_from_prompt(
         self,
@@ -159,10 +166,11 @@ class StyleGAN:
 
             if counter % img_save_freq == 0:
                 img = tensor_to_pil_img(img)
+                img.save(f"generations/{counter}.png")
                 gen_img_list.append(img)
 
                 print(f'Step {counter}')
-                print(f'Loss {loss.data.cpu().numpy()[0][0]}')
+                print(f'Loss {loss.data.cpu().numpy()[0]}')
 
                 latents_list.append(latents.clone())
 
@@ -198,4 +206,4 @@ class StyleGAN:
 
 if __name__ == "__main__":
     stylegan = StyleGAN()
-    stylegan.generate_from_prompt("An angry face")
+    stylegan.generate_from_prompt("The image of a woman with purple hair")
